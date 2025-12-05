@@ -65,11 +65,12 @@ serve(async (req) => {
 
     console.log(`Uploading file: ${file.name}, size: ${file.size}, type: ${file.type}`);
 
-    // Create unique filename
+    // Create unique filename preserving original name
     const timestamp = Date.now();
     const randomStr = Math.random().toString(36).substring(2, 8);
-    const extension = file.name.split('.').pop();
-    const objectKey = `${folder}/${timestamp}-${randomStr}.${extension}`;
+    // Sanitize filename: remove special chars but keep extension and readable name
+    const sanitizedName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+    const objectKey = `${folder}/${timestamp}-${randomStr}-${sanitizedName}`;
 
     // Convert file to ArrayBuffer
     const fileArrayBuffer = await file.arrayBuffer();

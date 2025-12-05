@@ -5,18 +5,22 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Upload, Paperclip, Loader2 } from 'lucide-react';
+import { Plus, Upload, Paperclip, Loader2, FileSpreadsheet, FileText, Pencil } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import RegisterPaidAccountModal from '@/components/forms/RegisterPaidAccountModal';
 import ImportBankStatementModal from '@/components/forms/ImportBankStatementModal';
+import EditPaidAccountModal from '@/components/forms/EditPaidAccountModal';
 import { useAuth } from '@/contexts/AuthContext';
+import { exportBankStatementToExcel, exportBankStatementToPDF } from '@/utils/bankStatementExportUtils';
 
 interface PaidAccount {
   id: string;
   bank: string | null;
   description: string;
   category_name: string | null;
+  category_id: string | null;
+  supplier_id: string | null;
   document_number: string | null;
   payment_date: string | null;
   value: number;
@@ -32,7 +36,7 @@ interface CostCenter {
 }
 
 const BankStatement = () => {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const [items, setItems] = useState<PaidAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [startDate, setStartDate] = useState('');
@@ -41,7 +45,11 @@ const BankStatement = () => {
   const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
   const [registerModalOpen, setRegisterModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<PaidAccount | null>(null);
   const [viewingAttachment, setViewingAttachment] = useState<string | null>(null);
+
+  const canEdit = role === 'admin' || role === 'editor';
 
   useEffect(() => {
     fetchCostCenters();
@@ -69,6 +77,7 @@ const BankStatement = () => {
           attachment_url,
           attachment_name,
           category_id,
+          supplier_id,
           categories(name)
         `)
         .eq('is_paid', true)
@@ -102,6 +111,8 @@ const BankStatement = () => {
         bank: item.bank,
         description: item.description,
         category_name: item.categories?.name || null,
+        category_id: item.category_id,
+        supplier_id: item.supplier_id,
         document_number: item.document_number,
         payment_date: item.payment_date,
         value: item.value,
@@ -151,19 +162,26 @@ const BankStatement = () => {
     toast.info('Gerando link...');
     
     try {
-      // Extract the path from the URL
+      // Extract the fileKey from the URL (path after bucket name)
       const urlObj = new URL(attachmentUrl);
       const pathParts = urlObj.pathname.split('/');
-      const bucketIndex = pathParts.findIndex(p => p === 'financeiro-eletronica-facil');
-      const filePath = pathParts.slice(bucketIndex + 1).join('/');
+      // Remove empty first element and bucket name, join the rest
+      const bucketIndex = pathParts.findIndex(p => p.includes('financeiro'));
+      const fileKey = pathParts.slice(bucketIndex + 1).join('/');
+      
+      console.log('Requesting signed URL for fileKey:', fileKey);
       
       const { data, error } = await supabase.functions.invoke('get-signed-url', {
-        body: { filePath },
+        body: { fileKey },
       });
 
       if (error) throw error;
       
-      window.open(data.signedUrl, '_blank');
+      if (data.signedUrl) {
+        window.open(data.signedUrl, '_blank');
+      } else {
+        throw new Error('URL não gerada');
+      }
     } catch (error) {
       console.error('Error getting signed URL:', error);
       toast.error('Erro ao abrir comprovante');
@@ -229,6 +247,29 @@ const BankStatement = () => {
     }
   };
 
+  const handleEdit = (account: PaidAccount) => {
+    setEditingAccount(account);
+    setEditModalOpen(true);
+  };
+
+  const handleExportExcel = () => {
+    if (items.length === 0) {
+      toast.error('Não há dados para exportar');
+      return;
+    }
+    exportBankStatementToExcel(items);
+    toast.success('Excel exportado!');
+  };
+
+  const handleExportPDF = () => {
+    if (items.length === 0) {
+      toast.error('Não há dados para exportar');
+      return;
+    }
+    exportBankStatementToPDF(items);
+    toast.success('PDF exportado!');
+  };
+
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -238,15 +279,27 @@ const BankStatement = () => {
             <p className="text-muted-foreground">Despesas pagas e importação de extratos</p>
           </div>
           
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setImportModalOpen(true)}>
-              <Upload className="h-4 w-4 mr-2" />
-              Importar OFX/Excel
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={handleExportExcel}>
+              <FileSpreadsheet className="h-4 w-4 mr-2" />
+              Excel
             </Button>
-            <Button onClick={() => setRegisterModalOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Registrar Conta Paga
+            <Button variant="outline" size="sm" onClick={handleExportPDF}>
+              <FileText className="h-4 w-4 mr-2" />
+              PDF
             </Button>
+            {canEdit && (
+              <>
+                <Button variant="outline" onClick={() => setImportModalOpen(true)}>
+                  <Upload className="h-4 w-4 mr-2" />
+                  Importar OFX/Excel
+                </Button>
+                <Button onClick={() => setRegisterModalOpen(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Registrar Conta Paga
+                </Button>
+              </>
+            )}
           </div>
         </div>
 
@@ -317,6 +370,7 @@ const BankStatement = () => {
                       <TableHead className="text-right">Multa/Juros</TableHead>
                       <TableHead>Rateio</TableHead>
                       <TableHead>Comprovante</TableHead>
+                      {canEdit && <TableHead>Ações</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -355,7 +409,7 @@ const BankStatement = () => {
                                 <Paperclip className="h-4 w-4" />
                               )}
                             </Button>
-                          ) : (
+                          ) : canEdit ? (
                             <label className="cursor-pointer">
                               <input
                                 type="file"
@@ -373,8 +427,22 @@ const BankStatement = () => {
                                 </span>
                               </Button>
                             </label>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">-</span>
                           )}
                         </TableCell>
+                        {canEdit && (
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title="Editar"
+                              onClick={() => handleEdit(item)}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -395,6 +463,13 @@ const BankStatement = () => {
         open={importModalOpen}
         onOpenChange={setImportModalOpen}
         onImport={handleImportTransactions}
+      />
+
+      <EditPaidAccountModal
+        open={editModalOpen}
+        onOpenChange={setEditModalOpen}
+        onSave={fetchItems}
+        account={editingAccount}
       />
     </AppLayout>
   );
