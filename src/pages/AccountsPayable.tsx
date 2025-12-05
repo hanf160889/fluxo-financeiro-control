@@ -8,9 +8,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Plus, Download, FileText, Check, Pencil, Paperclip, Trash2, Loader2 } from 'lucide-react';
 import NewAccountPayableModal from '@/components/forms/NewAccountPayableModal';
-import { useAccountsPayable } from '@/hooks/useAccountsPayable';
+import EditAccountPayableModal from '@/components/forms/EditAccountPayableModal';
+import { useAccountsPayable, AccountPayable } from '@/hooks/useAccountsPayable';
 import { useCategories } from '@/hooks/useSettings';
 import { useAuth } from '@/contexts/AuthContext';
+import { exportToExcel, exportToPDF } from '@/utils/exportUtils';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,7 +24,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
-const AccountsPayable = () => {
+const AccountsPayablePage = () => {
   const { items, loading, fetchItems, addItem, markAsPaid, deleteItem } = useAccountsPayable();
   const { items: categories } = useCategories();
   const { role } = useAuth();
@@ -31,6 +33,8 @@ const AccountsPayable = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [itemToEdit, setItemToEdit] = useState<AccountPayable | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [payDialogOpen, setPayDialogOpen] = useState(false);
@@ -80,7 +84,30 @@ const AccountsPayable = () => {
     }
   };
 
-  const getInstallmentText = (item: typeof items[0]) => {
+  const handleEdit = (item: AccountPayable) => {
+    setItemToEdit(item);
+    setIsEditModalOpen(true);
+  };
+
+  const handleViewAttachment = (url: string) => {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleExportExcel = () => {
+    const dateRange = startDate || endDate 
+      ? `_${startDate || 'inicio'}_${endDate || 'fim'}` 
+      : '';
+    exportToExcel(items, `contas-a-pagar${dateRange}`);
+  };
+
+  const handleExportPDF = () => {
+    const dateRange = startDate || endDate 
+      ? `_${startDate || 'inicio'}_${endDate || 'fim'}` 
+      : '';
+    exportToPDF(items, `contas-a-pagar${dateRange}`);
+  };
+
+  const getInstallmentText = (item: AccountPayable) => {
     if (item.total_installments && item.total_installments > 1) {
       return `${item.current_installment} de ${item.total_installments}`;
     }
@@ -97,11 +124,11 @@ const AccountsPayable = () => {
           </div>
           
           <div className="flex gap-2">
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" onClick={handleExportExcel}>
               <Download className="h-4 w-4 mr-2" />
               Baixar Excel
             </Button>
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" onClick={handleExportPDF}>
               <FileText className="h-4 w-4 mr-2" />
               Baixar PDF
             </Button>
@@ -212,12 +239,22 @@ const AccountsPayable = () => {
                               </Button>
                             )}
                             {canEdit && (
-                              <Button variant="ghost" size="icon" title="Editar">
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                title="Editar"
+                                onClick={() => handleEdit(item)}
+                              >
                                 <Pencil className="h-4 w-4" />
                               </Button>
                             )}
                             {item.attachment_url && (
-                              <Button variant="ghost" size="icon" title="Ver comprovante">
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                title="Ver comprovante"
+                                onClick={() => handleViewAttachment(item.attachment_url!)}
+                              >
                                 <Paperclip className="h-4 w-4" />
                               </Button>
                             )}
@@ -246,6 +283,13 @@ const AccountsPayable = () => {
           open={isModalOpen} 
           onOpenChange={setIsModalOpen}
           onSubmit={addItem}
+        />
+
+        <EditAccountPayableModal
+          open={isEditModalOpen}
+          onOpenChange={setIsEditModalOpen}
+          item={itemToEdit}
+          onSave={() => fetchItems()}
         />
 
         {/* Delete Confirmation Dialog */}
@@ -284,4 +328,4 @@ const AccountsPayable = () => {
   );
 };
 
-export default AccountsPayable;
+export default AccountsPayablePage;
