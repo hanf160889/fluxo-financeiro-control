@@ -37,7 +37,7 @@ const menuItems = [
 const AppSidebar = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, logout } = useAuth();
+  const { user, profile, logout } = useAuth();
 
   const handleLogout = () => {
     logout();
@@ -82,7 +82,7 @@ const AppSidebar = () => {
       <SidebarFooter className="border-t border-sidebar-border p-4">
         <div className="flex flex-col gap-2">
           <div className="text-sm">
-            <p className="font-medium text-sidebar-foreground">{user?.name}</p>
+            <p className="font-medium text-sidebar-foreground">{profile?.name || user?.email}</p>
             <p className="text-xs text-muted-foreground">{user?.email}</p>
           </div>
           <Button variant="ghost" size="sm" onClick={handleLogout} className="justify-start">
