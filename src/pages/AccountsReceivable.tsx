@@ -4,7 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Download } from 'lucide-react';
+import { Plus, Download, FileSpreadsheet, FileText } from 'lucide-react';
+import NewAccountReceivableModal from '@/components/forms/NewAccountReceivableModal';
+import { useToast } from '@/hooks/use-toast';
 
 const mockReceivables = [
   {
@@ -26,11 +28,28 @@ const mockReceivables = [
 ];
 
 const AccountsReceivable = () => {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const { toast } = useToast();
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL',
     }).format(value);
+  };
+
+  const handleExportExcel = () => {
+    toast({
+      title: "Exportando Excel",
+      description: "Download iniciado...",
+    });
+  };
+
+  const handleExportPDF = () => {
+    toast({
+      title: "Exportando PDF",
+      description: "Download iniciado...",
+    });
   };
 
   return (
@@ -42,11 +61,22 @@ const AccountsReceivable = () => {
             <p className="text-muted-foreground">Gerencie suas previsões de recebimento</p>
           </div>
           
-          <Button>
-            <Plus className="h-4 w-4 mr-2" />
-            Nova Conta a Receber
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleExportExcel}>
+              <FileSpreadsheet className="h-4 w-4 mr-2" />
+              Excel
+            </Button>
+            <Button variant="outline" onClick={handleExportPDF}>
+              <FileText className="h-4 w-4 mr-2" />
+              PDF
+            </Button>
+            <Button onClick={() => setIsModalOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Nova Conta a Receber
+            </Button>
+          </div>
         </div>
+
 
         {/* Filters */}
         <Card>
@@ -110,6 +140,8 @@ const AccountsReceivable = () => {
           </CardContent>
         </Card>
       </div>
+
+      <NewAccountReceivableModal open={isModalOpen} onOpenChange={setIsModalOpen} />
     </AppLayout>
   );
 };
