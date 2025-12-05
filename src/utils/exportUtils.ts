@@ -75,26 +75,15 @@ export const exportToPDF = (items: AccountPayable[], filename: string = 'contas-
     item.payment_date ? formatDate(item.payment_date) : '-',
     formatCurrency(item.value),
     item.is_paid ? 'Paga' : 'Pendente',
-    item.attachment_url ? 'Ver anexo' : '-',
+    item.attachment_url ? 'Sim' : 'Não',
   ]);
 
   autoTable(doc, {
-    head: [['Descrição', 'Fornecedor', 'Categoria', 'N° Doc', 'Vencimento', 'Parcela', 'Pagamento', 'Valor', 'Status', 'Comprovante']],
+    head: [['Descrição', 'Fornecedor', 'Categoria', 'N° Doc', 'Vencimento', 'Parcela', 'Pagamento', 'Valor', 'Status', 'Anexo']],
     body: tableData,
     startY: 35,
     styles: { fontSize: 8 },
     headStyles: { fillColor: [51, 51, 51] },
-    didDrawCell: (data) => {
-      // Make attachment links clickable
-      if (data.column.index === 9 && data.cell.section === 'body') {
-        const item = items[data.row.index];
-        if (item?.attachment_url) {
-          doc.setTextColor(0, 0, 255);
-          doc.textWithLink('Ver anexo', data.cell.x + 2, data.cell.y + 5, { url: item.attachment_url });
-          doc.setTextColor(0, 0, 0);
-        }
-      }
-    },
   });
 
   // Add total
