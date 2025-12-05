@@ -18,12 +18,14 @@ export type Database = {
         Row: {
           attachment_name: string | null
           attachment_url: string | null
+          bank: string | null
           category_id: string | null
           created_at: string
           current_installment: number | null
           description: string
           document_number: string | null
           due_date: string
+          fine_interest: number | null
           id: string
           is_paid: boolean
           is_recurring: boolean
@@ -37,12 +39,14 @@ export type Database = {
         Insert: {
           attachment_name?: string | null
           attachment_url?: string | null
+          bank?: string | null
           category_id?: string | null
           created_at?: string
           current_installment?: number | null
           description: string
           document_number?: string | null
           due_date: string
+          fine_interest?: number | null
           id?: string
           is_paid?: boolean
           is_recurring?: boolean
@@ -56,12 +60,14 @@ export type Database = {
         Update: {
           attachment_name?: string | null
           attachment_url?: string | null
+          bank?: string | null
           category_id?: string | null
           created_at?: string
           current_installment?: number | null
           description?: string
           document_number?: string | null
           due_date?: string
+          fine_interest?: number | null
           id?: string
           is_paid?: boolean
           is_recurring?: boolean
@@ -127,6 +133,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      banks: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       categories: {
         Row: {

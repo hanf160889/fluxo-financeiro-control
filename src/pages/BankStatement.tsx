@@ -1,53 +1,232 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import AppLayout from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Upload, Paperclip } from 'lucide-react';
+import { Plus, Upload, Paperclip, Loader2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import RegisterPaidAccountModal from '@/components/forms/RegisterPaidAccountModal';
+import ImportBankStatementModal from '@/components/forms/ImportBankStatementModal';
+import { useAuth } from '@/contexts/AuthContext';
 
-const mockPaidAccounts = [
-  {
-    id: '1',
-    bank: 'Banco do Brasil',
-    description: 'Pagamento Fornecedor ABC',
-    category: 'Materiais',
-    documentNumber: 'DOC-001',
-    paymentDate: '2024-01-15',
-    value: 3500,
-    fineInterest: 0,
-    costCenterSplit: [
-      { name: 'Empresa 1', percentage: 60 },
-      { name: 'Empresa 2', percentage: 40 },
-    ],
-    hasAttachment: true,
-  },
-  {
-    id: '2',
-    bank: 'Itaú',
-    description: 'Conta de Luz',
-    category: 'Utilidades',
-    documentNumber: 'DOC-002',
-    paymentDate: '2024-01-14',
-    value: 850,
-    fineInterest: 12.50,
-    costCenterSplit: [
-      { name: 'Empresa 1', percentage: 50 },
-      { name: 'Empresa 2', percentage: 50 },
-    ],
-    hasAttachment: false,
-  },
-];
+interface PaidAccount {
+  id: string;
+  bank: string | null;
+  description: string;
+  category_name: string | null;
+  document_number: string | null;
+  payment_date: string | null;
+  value: number;
+  fine_interest: number | null;
+  attachment_url: string | null;
+  attachment_name: string | null;
+  cost_centers: { name: string; percentage: number }[];
+}
+
+interface CostCenter {
+  id: string;
+  name: string;
+}
 
 const BankStatement = () => {
-  const [filterPeriod, setFilterPeriod] = useState('all');
+  const { user } = useAuth();
+  const [items, setItems] = useState<PaidAccount[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [costCenterFilter, setCostCenterFilter] = useState('all');
+  const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
+  const [registerModalOpen, setRegisterModalOpen] = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [viewingAttachment, setViewingAttachment] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchCostCenters();
+    fetchItems();
+  }, []);
+
+  const fetchCostCenters = async () => {
+    const { data } = await supabase.from('cost_centers').select('id, name').order('name');
+    if (data) setCostCenters(data);
+  };
+
+  const fetchItems = async () => {
+    setLoading(true);
+    try {
+      let query = supabase
+        .from('accounts_payable')
+        .select(`
+          id,
+          bank,
+          description,
+          document_number,
+          payment_date,
+          value,
+          fine_interest,
+          attachment_url,
+          attachment_name,
+          category_id,
+          categories(name)
+        `)
+        .eq('is_paid', true)
+        .order('payment_date', { ascending: false });
+
+      if (startDate) {
+        query = query.gte('payment_date', startDate);
+      }
+      if (endDate) {
+        query = query.lte('payment_date', endDate);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      // Fetch cost center distributions
+      const ids = data?.map(d => d.id) || [];
+      let costCenterData: any[] = [];
+      
+      if (ids.length > 0) {
+        const { data: ccData } = await supabase
+          .from('accounts_payable_cost_centers')
+          .select('account_payable_id, percentage, cost_centers(name)')
+          .in('account_payable_id', ids);
+        costCenterData = ccData || [];
+      }
+
+      const mappedItems: PaidAccount[] = (data || []).map(item => ({
+        id: item.id,
+        bank: item.bank,
+        description: item.description,
+        category_name: item.categories?.name || null,
+        document_number: item.document_number,
+        payment_date: item.payment_date,
+        value: item.value,
+        fine_interest: item.fine_interest,
+        attachment_url: item.attachment_url,
+        attachment_name: item.attachment_name,
+        cost_centers: costCenterData
+          .filter(cc => cc.account_payable_id === item.id)
+          .map(cc => ({
+            name: cc.cost_centers?.name || '',
+            percentage: cc.percentage,
+          })),
+      }));
+
+      // Filter by cost center if selected
+      if (costCenterFilter !== 'all') {
+        const filtered = mappedItems.filter(item =>
+          item.cost_centers.some(cc => cc.name === costCenterFilter)
+        );
+        setItems(filtered);
+      } else {
+        setItems(mappedItems);
+      }
+    } catch (error) {
+      console.error('Error fetching items:', error);
+      toast.error('Erro ao carregar dados');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchItems();
+  }, [startDate, endDate, costCenterFilter]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL',
     }).format(value);
+  };
+
+  const handleViewAttachment = async (attachmentUrl: string) => {
+    if (!attachmentUrl) return;
+    
+    setViewingAttachment(attachmentUrl);
+    toast.info('Gerando link...');
+    
+    try {
+      // Extract the path from the URL
+      const urlObj = new URL(attachmentUrl);
+      const pathParts = urlObj.pathname.split('/');
+      const bucketIndex = pathParts.findIndex(p => p === 'financeiro-eletronica-facil');
+      const filePath = pathParts.slice(bucketIndex + 1).join('/');
+      
+      const { data, error } = await supabase.functions.invoke('get-signed-url', {
+        body: { filePath },
+      });
+
+      if (error) throw error;
+      
+      window.open(data.signedUrl, '_blank');
+    } catch (error) {
+      console.error('Error getting signed URL:', error);
+      toast.error('Erro ao abrir comprovante');
+    } finally {
+      setViewingAttachment(null);
+    }
+  };
+
+  const handleUploadAttachment = async (itemId: string, file: File) => {
+    toast.info('Enviando arquivo...');
+    
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('folder', 'extratos-bancarios');
+
+      const { data, error } = await supabase.functions.invoke('upload-to-wasabi', {
+        body: formData,
+      });
+
+      if (error) throw error;
+
+      await supabase
+        .from('accounts_payable')
+        .update({
+          attachment_url: data.url,
+          attachment_name: file.name,
+        })
+        .eq('id', itemId);
+
+      toast.success('Comprovante anexado!');
+      fetchItems();
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast.error('Erro ao anexar comprovante');
+    }
+  };
+
+  const handleImportTransactions = async (transactions: any[]) => {
+    toast.info('Importando transações...');
+    
+    try {
+      const toInsert = transactions.map(t => ({
+        description: t.description,
+        due_date: t.date,
+        payment_date: t.date,
+        value: t.value,
+        is_paid: true,
+        user_id: user?.id,
+      }));
+
+      const { error } = await supabase
+        .from('accounts_payable')
+        .insert(toInsert);
+
+      if (error) throw error;
+
+      toast.success(`${transactions.length} transações importadas!`);
+      fetchItems();
+    } catch (error) {
+      console.error('Import error:', error);
+      toast.error('Erro ao importar transações');
+    }
   };
 
   return (
@@ -60,11 +239,11 @@ const BankStatement = () => {
           </div>
           
           <div className="flex gap-2">
-            <Button variant="outline">
+            <Button variant="outline" onClick={() => setImportModalOpen(true)}>
               <Upload className="h-4 w-4 mr-2" />
               Importar OFX/Excel
             </Button>
-            <Button>
+            <Button onClick={() => setRegisterModalOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Registrar Conta Paga
             </Button>
@@ -76,20 +255,33 @@ const BankStatement = () => {
           <CardContent className="pt-6">
             <div className="flex flex-col sm:flex-row gap-4">
               <div className="flex-1">
-                <Input type="date" placeholder="Data inicial" />
+                <Input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  placeholder="Data inicial"
+                />
               </div>
               <div className="flex-1">
-                <Input type="date" placeholder="Data final" />
+                <Input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  placeholder="Data final"
+                />
               </div>
               <div className="flex-1">
-                <Select value={filterPeriod} onValueChange={setFilterPeriod}>
+                <Select value={costCenterFilter} onValueChange={setCostCenterFilter}>
                   <SelectTrigger>
                     <SelectValue placeholder="Empresa" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todas empresas</SelectItem>
-                    <SelectItem value="empresa1">Empresa 1</SelectItem>
-                    <SelectItem value="empresa2">Empresa 2</SelectItem>
+                    {costCenters.map((cc) => (
+                      <SelectItem key={cc.id} value={cc.name}>
+                        {cc.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -103,7 +295,11 @@ const BankStatement = () => {
             <CardTitle>Contas Pagas</CardTitle>
           </CardHeader>
           <CardContent>
-            {mockPaidAccounts.length === 0 ? (
+            {loading ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin" />
+              </div>
+            ) : items.length === 0 ? (
               <p className="text-muted-foreground text-center py-8">
                 Nenhuma conta paga registrada
               </p>
@@ -124,32 +320,59 @@ const BankStatement = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {mockPaidAccounts.map((account) => (
-                      <TableRow key={account.id}>
-                        <TableCell>{account.bank}</TableCell>
-                        <TableCell className="font-medium">{account.description}</TableCell>
-                        <TableCell>{account.category}</TableCell>
-                        <TableCell>{account.documentNumber}</TableCell>
-                        <TableCell>{account.paymentDate}</TableCell>
-                        <TableCell className="text-right">{formatCurrency(account.value)}</TableCell>
-                        <TableCell className="text-right">{formatCurrency(account.fineInterest)}</TableCell>
+                    {items.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell>{item.bank || '-'}</TableCell>
+                        <TableCell className="font-medium">{item.description}</TableCell>
+                        <TableCell>{item.category_name || '-'}</TableCell>
+                        <TableCell>{item.document_number || '-'}</TableCell>
+                        <TableCell>{item.payment_date || '-'}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(item.value)}</TableCell>
+                        <TableCell className="text-right">
+                          {formatCurrency(item.fine_interest || 0)}
+                        </TableCell>
                         <TableCell>
                           <div className="text-xs">
-                            {account.costCenterSplit.map((cc, index) => (
-                              <div key={index}>{cc.name}: {cc.percentage}%</div>
-                            ))}
+                            {item.cost_centers.length > 0
+                              ? item.cost_centers.map((cc, index) => (
+                                  <div key={index}>{cc.name}: {cc.percentage}%</div>
+                                ))
+                              : '-'}
                           </div>
                         </TableCell>
                         <TableCell>
-                          {account.hasAttachment ? (
-                            <Button variant="ghost" size="icon" title="Ver comprovante">
-                              <Paperclip className="h-4 w-4" />
+                          {item.attachment_url ? (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title="Ver comprovante"
+                              onClick={() => handleViewAttachment(item.attachment_url!)}
+                              disabled={viewingAttachment === item.attachment_url}
+                            >
+                              {viewingAttachment === item.attachment_url ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Paperclip className="h-4 w-4" />
+                              )}
                             </Button>
                           ) : (
-                            <Button variant="ghost" size="sm">
-                              <Plus className="h-4 w-4 mr-1" />
-                              Anexar
-                            </Button>
+                            <label className="cursor-pointer">
+                              <input
+                                type="file"
+                                className="hidden"
+                                accept=".pdf,.jpg,.jpeg,.png"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handleUploadAttachment(item.id, file);
+                                }}
+                              />
+                              <Button variant="ghost" size="sm" asChild>
+                                <span>
+                                  <Plus className="h-4 w-4 mr-1" />
+                                  Anexar
+                                </span>
+                              </Button>
+                            </label>
                           )}
                         </TableCell>
                       </TableRow>
@@ -161,6 +384,18 @@ const BankStatement = () => {
           </CardContent>
         </Card>
       </div>
+
+      <RegisterPaidAccountModal
+        open={registerModalOpen}
+        onOpenChange={setRegisterModalOpen}
+        onSave={fetchItems}
+      />
+
+      <ImportBankStatementModal
+        open={importModalOpen}
+        onOpenChange={setImportModalOpen}
+        onImport={handleImportTransactions}
+      />
     </AppLayout>
   );
 };
