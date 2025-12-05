@@ -5,7 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Upload, Paperclip, Loader2, FileSpreadsheet, FileText, Pencil } from 'lucide-react';
+import { Plus, Upload, Paperclip, Loader2, FileSpreadsheet, FileText, Pencil, Trash2 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import RegisterPaidAccountModal from '@/components/forms/RegisterPaidAccountModal';
@@ -50,8 +52,12 @@ const BankStatement = () => {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<PaidAccount | null>(null);
   const [viewingAttachment, setViewingAttachment] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const canEdit = role === 'admin' || role === 'editor';
+  const canDelete = role === 'admin';
 
   useEffect(() => {
     fetchCostCenters();
@@ -294,6 +300,53 @@ const BankStatement = () => {
     toast.success('PDF exportado!');
   };
 
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedIds(items.map(item => item.id));
+    } else {
+      setSelectedIds([]);
+    }
+  };
+
+  const handleSelectItem = (id: string, checked: boolean) => {
+    if (checked) {
+      setSelectedIds(prev => [...prev, id]);
+    } else {
+      setSelectedIds(prev => prev.filter(i => i !== id));
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedIds.length === 0) return;
+    
+    setDeleting(true);
+    try {
+      // First delete cost center distributions
+      await supabase
+        .from('accounts_payable_cost_centers')
+        .delete()
+        .in('account_payable_id', selectedIds);
+
+      // Then delete the accounts
+      const { error } = await supabase
+        .from('accounts_payable')
+        .delete()
+        .in('id', selectedIds);
+
+      if (error) throw error;
+
+      toast.success(`${selectedIds.length} conta(s) excluída(s)!`);
+      setSelectedIds([]);
+      setDeleteDialogOpen(false);
+      fetchItems();
+    } catch (error) {
+      console.error('Delete error:', error);
+      toast.error('Erro ao excluir contas');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -382,6 +435,12 @@ const BankStatement = () => {
                   Limpar Filtros
                 </Button>
               )}
+              {canDelete && selectedIds.length > 0 && (
+                <Button variant="destructive" onClick={() => setDeleteDialogOpen(true)}>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Excluir ({selectedIds.length})
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -405,6 +464,14 @@ const BankStatement = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      {canDelete && (
+                        <TableHead className="w-[40px]">
+                          <Checkbox
+                            checked={selectedIds.length === items.length && items.length > 0}
+                            onCheckedChange={handleSelectAll}
+                          />
+                        </TableHead>
+                      )}
                       <TableHead>Banco</TableHead>
                       <TableHead>Descrição</TableHead>
                       <TableHead>Categoria</TableHead>
@@ -420,6 +487,14 @@ const BankStatement = () => {
                   <TableBody>
                     {items.map((item) => (
                       <TableRow key={item.id}>
+                        {canDelete && (
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedIds.includes(item.id)}
+                              onCheckedChange={(checked) => handleSelectItem(item.id, !!checked)}
+                            />
+                          </TableCell>
+                        )}
                         <TableCell>{item.bank || '-'}</TableCell>
                         <TableCell className="font-medium">{item.description}</TableCell>
                         <TableCell>{item.category_name || '-'}</TableCell>
@@ -515,6 +590,24 @@ const BankStatement = () => {
         onSave={fetchItems}
         account={editingAccount}
       />
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir contas selecionadas</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir {selectedIds.length} conta(s)? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteSelected} disabled={deleting}>
+              {deleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 };
