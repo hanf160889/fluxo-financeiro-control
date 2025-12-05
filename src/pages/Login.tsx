@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, DollarSign } from 'lucide-react';
+import { Loader2, DollarSign, CheckCircle } from 'lucide-react';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -21,28 +21,30 @@ const Login = () => {
   const [registerEmail, setRegisterEmail] = useState('');
   const [registerPassword, setRegisterPassword] = useState('');
   const [registerError, setRegisterError] = useState('');
+  const [registerSuccess, setRegisterSuccess] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
     
-    const success = await login(loginEmail, loginPassword);
-    if (success) {
+    const result = await login(loginEmail, loginPassword);
+    if (result.success) {
       navigate('/dashboard');
     } else {
-      setLoginError('Credenciais inválidas');
+      setLoginError(result.error || 'Credenciais inválidas');
     }
   };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setRegisterError('');
+    setRegisterSuccess(false);
     
-    const success = await register(registerEmail, registerPassword, registerName);
-    if (success) {
-      navigate('/dashboard');
+    const result = await register(registerEmail, registerPassword, registerName);
+    if (result.success) {
+      setRegisterSuccess(true);
     } else {
-      setRegisterError('Erro ao criar conta. Verifique os dados.');
+      setRegisterError(result.error || 'Erro ao criar conta. Verifique os dados.');
     }
   };
 
@@ -118,6 +120,15 @@ const Login = () => {
                   </Alert>
                 )}
                 
+                {registerSuccess && (
+                  <Alert className="bg-green-50 border-green-200">
+                    <CheckCircle className="h-4 w-4 text-green-600" />
+                    <AlertDescription className="text-green-800">
+                      Conta criada com sucesso! Verifique seu email para confirmar o cadastro.
+                    </AlertDescription>
+                  </Alert>
+                )}
+                
                 <div className="space-y-2">
                   <Label htmlFor="register-name">Nome</Label>
                   <Input
@@ -155,7 +166,7 @@ const Login = () => {
                   />
                 </div>
                 
-                <Button type="submit" className="w-full" disabled={isLoading}>
+                <Button type="submit" className="w-full" disabled={isLoading || registerSuccess}>
                   {isLoading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
