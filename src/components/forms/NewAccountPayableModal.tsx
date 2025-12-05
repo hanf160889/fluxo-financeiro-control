@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,17 +7,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { useSuppliers, useCategories, useCostCenters } from '@/hooks/useSettings';
+import { AccountPayableInput } from '@/hooks/useAccountsPayable';
 
 interface NewAccountPayableModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onSubmit: (data: AccountPayableInput) => Promise<boolean>;
 }
 
-const mockSuppliers = ['Imobiliária XYZ', 'Materiais ABC', 'Serviços DEF', 'Consultoria GHI'];
-const mockCategories = ['Aluguel', 'Materiais', 'Serviços', 'Consultoria', 'Utilidades'];
-const mockCostCenters = ['Empresa 1', 'Empresa 2'];
+const NewAccountPayableModal = ({ open, onOpenChange, onSubmit }: NewAccountPayableModalProps) => {
+  const { items: suppliers } = useSuppliers();
+  const { items: categories } = useCategories();
+  const { items: costCenters } = useCostCenters();
 
-const NewAccountPayableModal = ({ open, onOpenChange }: NewAccountPayableModalProps) => {
   const [description, setDescription] = useState('');
   const [supplier, setSupplier] = useState('');
   const [category, setCategory] = useState('');
@@ -26,11 +29,18 @@ const NewAccountPayableModal = ({ open, onOpenChange }: NewAccountPayableModalPr
   const [value, setValue] = useState('');
   const [isRecurring, setIsRecurring] = useState(false);
   const [installments, setInstallments] = useState('');
-  const [costCenterPercentages, setCostCenterPercentages] = useState<Record<string, string>>(
-    Object.fromEntries(mockCostCenters.map((cc) => [cc, '']))
-  );
+  const [costCenterPercentages, setCostCenterPercentages] = useState<Record<string, string>>({});
   const [attachment, setAttachment] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Initialize cost center percentages when costCenters load
+  useEffect(() => {
+    if (costCenters.length > 0 && Object.keys(costCenterPercentages).length === 0) {
+      setCostCenterPercentages(
+        Object.fromEntries(costCenters.map((cc) => [cc.id, '']))
+      );
+    }
+  }, [costCenters]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -42,10 +52,10 @@ const NewAccountPayableModal = ({ open, onOpenChange }: NewAccountPayableModalPr
     setAttachment(null);
   };
 
-  const handleCostCenterChange = (costCenter: string, percentage: string) => {
+  const handleCostCenterChange = (costCenterId: string, percentage: string) => {
     setCostCenterPercentages((prev) => ({
       ...prev,
-      [costCenter]: percentage,
+      [costCenterId]: percentage,
     }));
   };
 
@@ -69,14 +79,36 @@ const NewAccountPayableModal = ({ open, onOpenChange }: NewAccountPayableModalPr
     }
 
     setIsSubmitting(true);
+
+    const costCentersData = Object.entries(costCenterPercentages)
+      .filter(([_, percentage]) => parseFloat(percentage) > 0)
+      .map(([cost_center_id, percentage]) => ({
+        cost_center_id,
+        percentage: parseFloat(percentage),
+      }));
+
+    const data: AccountPayableInput = {
+      description,
+      supplier_id: supplier,
+      category_id: category,
+      document_number: documentNumber || null,
+      due_date: dueDate,
+      value: parseFloat(value),
+      is_recurring: isRecurring,
+      total_installments: isRecurring ? parseInt(installments) || null : null,
+      current_installment: null,
+      attachment_url: null, // Wasabi URL will be set after upload
+      attachment_name: attachment?.name || null,
+      cost_centers: costCentersData,
+    };
+
+    const success = await onSubmit(data);
     
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    
-    toast.success('Conta a pagar registrada com sucesso!');
     setIsSubmitting(false);
-    resetForm();
-    onOpenChange(false);
+    if (success) {
+      resetForm();
+      onOpenChange(false);
+    }
   };
 
   const resetForm = () => {
@@ -88,7 +120,9 @@ const NewAccountPayableModal = ({ open, onOpenChange }: NewAccountPayableModalPr
     setValue('');
     setIsRecurring(false);
     setInstallments('');
-    setCostCenterPercentages(Object.fromEntries(mockCostCenters.map((cc) => [cc, ''])));
+    setCostCenterPercentages(
+      Object.fromEntries(costCenters.map((cc) => [cc.id, '']))
+    );
     setAttachment(null);
   };
 
@@ -118,8 +152,8 @@ const NewAccountPayableModal = ({ open, onOpenChange }: NewAccountPayableModalPr
                   <SelectValue placeholder="Selecione" />
                 </SelectTrigger>
                 <SelectContent>
-                  {mockSuppliers.map((s) => (
-                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  {suppliers.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -132,8 +166,8 @@ const NewAccountPayableModal = ({ open, onOpenChange }: NewAccountPayableModalPr
                   <SelectValue placeholder="Selecione" />
                 </SelectTrigger>
                 <SelectContent>
-                  {mockCategories.map((c) => (
-                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                  {categories.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -204,15 +238,15 @@ const NewAccountPayableModal = ({ open, onOpenChange }: NewAccountPayableModalPr
           <div className="grid gap-2">
             <Label>Divisão por Centro de Custo (%)</Label>
             <div className="grid grid-cols-2 gap-4">
-              {mockCostCenters.map((cc) => (
-                <div key={cc} className="flex items-center gap-2">
-                  <Label className="min-w-[80px] text-sm">{cc}:</Label>
+              {costCenters.map((cc) => (
+                <div key={cc.id} className="flex items-center gap-2">
+                  <Label className="min-w-[80px] text-sm">{cc.name}:</Label>
                   <Input
                     type="number"
                     min="0"
                     max="100"
-                    value={costCenterPercentages[cc]}
-                    onChange={(e) => handleCostCenterChange(cc, e.target.value)}
+                    value={costCenterPercentages[cc.id] || ''}
+                    onChange={(e) => handleCostCenterChange(cc.id, e.target.value)}
                     placeholder="0"
                     className="w-20"
                   />
@@ -261,6 +295,9 @@ const NewAccountPayableModal = ({ open, onOpenChange }: NewAccountPayableModalPr
                 </label>
               </div>
             )}
+            <p className="text-xs text-muted-foreground">
+              Upload via Wasabi será implementado futuramente
+            </p>
           </div>
         </div>
 

@@ -141,3 +141,24 @@ export function useUpdateUserRole() {
     },
   });
 }
+
+// Convenience hooks for specific tables
+export function useSuppliers() {
+  const { data, isLoading, error } = useSettingsData('suppliers');
+  return { items: data || [], loading: isLoading, error };
+}
+
+export function useCategories() {
+  const { data, isLoading, error } = useSettingsData('categories');
+  return { items: data || [], loading: isLoading, error };
+}
+
+export function useCostCenters() {
+  const { data, isLoading, error } = useSettingsData('cost_centers');
+  return { items: data || [], loading: isLoading, error };
+}
+
+export function useOrigins() {
+  const { data, isLoading, error } = useSettingsData('origins');
+  return { items: data || [], loading: isLoading, error };
+}

@@ -14,6 +14,120 @@ export type Database = {
   }
   public: {
     Tables: {
+      accounts_payable: {
+        Row: {
+          attachment_name: string | null
+          attachment_url: string | null
+          category_id: string | null
+          created_at: string
+          current_installment: number | null
+          description: string
+          document_number: string | null
+          due_date: string
+          id: string
+          is_paid: boolean
+          is_recurring: boolean
+          payment_date: string | null
+          supplier_id: string | null
+          total_installments: number | null
+          updated_at: string
+          user_id: string
+          value: number
+        }
+        Insert: {
+          attachment_name?: string | null
+          attachment_url?: string | null
+          category_id?: string | null
+          created_at?: string
+          current_installment?: number | null
+          description: string
+          document_number?: string | null
+          due_date: string
+          id?: string
+          is_paid?: boolean
+          is_recurring?: boolean
+          payment_date?: string | null
+          supplier_id?: string | null
+          total_installments?: number | null
+          updated_at?: string
+          user_id: string
+          value: number
+        }
+        Update: {
+          attachment_name?: string | null
+          attachment_url?: string | null
+          category_id?: string | null
+          created_at?: string
+          current_installment?: number | null
+          description?: string
+          document_number?: string | null
+          due_date?: string
+          id?: string
+          is_paid?: boolean
+          is_recurring?: boolean
+          payment_date?: string | null
+          supplier_id?: string | null
+          total_installments?: number | null
+          updated_at?: string
+          user_id?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accounts_payable_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accounts_payable_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      accounts_payable_cost_centers: {
+        Row: {
+          account_payable_id: string
+          cost_center_id: string
+          created_at: string
+          id: string
+          percentage: number
+        }
+        Insert: {
+          account_payable_id: string
+          cost_center_id: string
+          created_at?: string
+          id?: string
+          percentage: number
+        }
+        Update: {
+          account_payable_id?: string
+          cost_center_id?: string
+          created_at?: string
+          id?: string
+          percentage?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accounts_payable_cost_centers_account_payable_id_fkey"
+            columns: ["account_payable_id"]
+            isOneToOne: false
+            referencedRelation: "accounts_payable"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accounts_payable_cost_centers_cost_center_id_fkey"
+            columns: ["cost_center_id"]
+            isOneToOne: false
+            referencedRelation: "cost_centers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       categories: {
         Row: {
           created_at: string
