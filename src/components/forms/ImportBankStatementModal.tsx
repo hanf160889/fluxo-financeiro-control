@@ -13,6 +13,9 @@ interface ImportedTransaction {
   description: string;
   value: number;
   selected: boolean;
+  banco?: string;
+  documento?: string;
+  multa?: number;
 }
 
 interface ImportBankStatementModalProps {
@@ -71,6 +74,49 @@ const ImportBankStatementModal = ({ open, onOpenChange, onImport }: ImportBankSt
     return transactions;
   };
 
+  const parseExcelDate = (cell: any): string => {
+    if (!cell) return '';
+    
+    // Excel date serial number
+    if (typeof cell === 'number' && cell > 40000 && cell < 60000) {
+      const excelDate = XLSX.SSF.parse_date_code(cell);
+      return `${excelDate.y}-${String(excelDate.m).padStart(2, '0')}-${String(excelDate.d).padStart(2, '0')}`;
+    }
+    
+    // String format DD/MM/YY or DD/MM/YYYY
+    if (typeof cell === 'string') {
+      const match = cell.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+      if (match) {
+        const day = match[1].padStart(2, '0');
+        const month = match[2].padStart(2, '0');
+        let year = match[3];
+        if (year.length === 2) {
+          year = parseInt(year) > 50 ? '19' + year : '20' + year;
+        }
+        return `${year}-${month}-${day}`;
+      }
+      
+      // Already in YYYY-MM-DD format
+      if (/^\d{4}-\d{2}-\d{2}$/.test(cell)) {
+        return cell;
+      }
+    }
+    
+    return '';
+  };
+
+  const parseExcelValue = (cell: any): number => {
+    if (!cell) return 0;
+    if (typeof cell === 'number') return Math.abs(cell);
+    if (typeof cell === 'string') {
+      // Remove currency formatting: R$ 1.234,56 -> 1234.56
+      const cleaned = cell.replace(/[R$\s.]/g, '').replace(',', '.');
+      const parsed = parseFloat(cleaned);
+      return isNaN(parsed) ? 0 : Math.abs(parsed);
+    }
+    return 0;
+  };
+
   const parseExcel = (data: ArrayBuffer): ImportedTransaction[] => {
     const workbook = XLSX.read(data, { type: 'array' });
     const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -78,43 +124,48 @@ const ImportBankStatementModal = ({ open, onOpenChange, onImport }: ImportBankSt
     
     const transactions: ImportedTransaction[] = [];
     
-    // Skip header row, look for rows with date, description, value
+    if (jsonData.length < 2) return transactions;
+    
+    // Get header row to find column indices
+    const headers = jsonData[0].map((h: any) => (h || '').toString().toLowerCase().trim());
+    
+    // Map column names to indices - support multiple variations
+    const colMap: Record<string, number> = {};
+    headers.forEach((h: string, i: number) => {
+      if (h.includes('banco')) colMap['banco'] = i;
+      if (h.includes('descri')) colMap['descricao'] = i;
+      if (h.includes('categoria')) colMap['categoria'] = i;
+      if (h.includes('doc')) colMap['documento'] = i;
+      if (h.includes('data') || h.includes('pgto') || h.includes('pagamento')) colMap['data'] = i;
+      if (h === 'valor' || h.includes('valor')) colMap['valor'] = i;
+      if (h.includes('multa') || h.includes('juros')) colMap['multa'] = i;
+    });
+    
+    console.log('Column mapping:', colMap, 'Headers:', headers);
+    
+    // Parse data rows
     for (let i = 1; i < jsonData.length; i++) {
       const row = jsonData[i];
       if (!row || row.length < 2) continue;
       
-      // Try to find date, description, and value columns
-      let date = '';
-      let description = '';
-      let value = 0;
+      const banco = colMap['banco'] !== undefined ? (row[colMap['banco']] || '').toString() : '';
+      const descricao = colMap['descricao'] !== undefined ? (row[colMap['descricao']] || '').toString() : '';
+      const documento = colMap['documento'] !== undefined ? (row[colMap['documento']] || '').toString() : '';
+      const data = colMap['data'] !== undefined ? parseExcelDate(row[colMap['data']]) : '';
+      const valor = colMap['valor'] !== undefined ? parseExcelValue(row[colMap['valor']]) : 0;
+      const multa = colMap['multa'] !== undefined ? parseExcelValue(row[colMap['multa']]) : 0;
       
-      for (const cell of row) {
-        if (cell === null || cell === undefined) continue;
-        
-        // Check if it's a date
-        if (typeof cell === 'number' && cell > 40000 && cell < 50000) {
-          // Excel date serial number
-          const excelDate = XLSX.SSF.parse_date_code(cell);
-          date = `${excelDate.y}-${String(excelDate.m).padStart(2, '0')}-${String(excelDate.d).padStart(2, '0')}`;
-        } else if (typeof cell === 'string' && /^\d{2}\/\d{2}\/\d{4}$/.test(cell)) {
-          const [day, month, year] = cell.split('/');
-          date = `${year}-${month}-${day}`;
-        } else if (typeof cell === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(cell)) {
-          date = cell;
-        } else if (typeof cell === 'number' && !date) {
-          value = Math.abs(cell);
-        } else if (typeof cell === 'string' && cell.length > 3 && !description) {
-          description = cell;
-        }
-      }
-      
-      if (date && description && value > 0) {
+      // Only add if we have at least description and value
+      if (descricao && valor > 0) {
         transactions.push({
           id: crypto.randomUUID(),
-          date,
-          description,
-          value,
+          date: data || new Date().toISOString().split('T')[0],
+          description: descricao,
+          value: valor,
           selected: true,
+          banco,
+          documento,
+          multa,
         });
       }
     }
@@ -245,9 +296,12 @@ const ImportBankStatementModal = ({ open, onOpenChange, onImport }: ImportBankSt
                           onCheckedChange={(checked) => toggleAll(!!checked)}
                         />
                       </TableHead>
-                      <TableHead>Data</TableHead>
+                      <TableHead>Banco</TableHead>
                       <TableHead>Descrição</TableHead>
+                      <TableHead>N° Doc</TableHead>
+                      <TableHead>Data</TableHead>
                       <TableHead className="text-right">Valor</TableHead>
+                      <TableHead className="text-right">Multa/Juros</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -259,9 +313,12 @@ const ImportBankStatementModal = ({ open, onOpenChange, onImport }: ImportBankSt
                             onCheckedChange={() => toggleTransaction(t.id)}
                           />
                         </TableCell>
-                        <TableCell>{t.date}</TableCell>
+                        <TableCell>{t.banco || '-'}</TableCell>
                         <TableCell>{t.description}</TableCell>
+                        <TableCell>{t.documento || '-'}</TableCell>
+                        <TableCell>{t.date}</TableCell>
                         <TableCell className="text-right">{formatCurrency(t.value)}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(t.multa || 0)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

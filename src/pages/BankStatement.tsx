@@ -42,7 +42,9 @@ const BankStatement = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [costCenterFilter, setCostCenterFilter] = useState('all');
+  const [bankFilter, setBankFilter] = useState('all');
   const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
+  const [banks, setBanks] = useState<{ id: string; name: string }[]>([]);
   const [registerModalOpen, setRegisterModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -53,12 +55,18 @@ const BankStatement = () => {
 
   useEffect(() => {
     fetchCostCenters();
+    fetchBanks();
     fetchItems();
   }, []);
 
   const fetchCostCenters = async () => {
     const { data } = await supabase.from('cost_centers').select('id, name').order('name');
     if (data) setCostCenters(data);
+  };
+
+  const fetchBanks = async () => {
+    const { data } = await supabase.from('banks').select('id, name').order('name');
+    if (data) setBanks(data);
   };
 
   const fetchItems = async () => {
@@ -88,6 +96,9 @@ const BankStatement = () => {
       }
       if (endDate) {
         query = query.lte('payment_date', endDate);
+      }
+      if (bankFilter !== 'all') {
+        query = query.eq('bank', bankFilter);
       }
 
       const { data, error } = await query;
@@ -146,7 +157,16 @@ const BankStatement = () => {
 
   useEffect(() => {
     fetchItems();
-  }, [startDate, endDate, costCenterFilter]);
+  }, [startDate, endDate, costCenterFilter, bankFilter]);
+
+  const clearFilters = () => {
+    setStartDate('');
+    setEndDate('');
+    setCostCenterFilter('all');
+    setBankFilter('all');
+  };
+
+  const hasActiveFilters = startDate || endDate || costCenterFilter !== 'all' || bankFilter !== 'all';
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -162,12 +182,13 @@ const BankStatement = () => {
     toast.info('Gerando link...');
     
     try {
-      // Extract the fileKey from the URL (path after bucket name)
+      // Extract the fileKey from the URL
+      // URL format: https://bucket.endpoint/folder/filename.ext
       const urlObj = new URL(attachmentUrl);
-      const pathParts = urlObj.pathname.split('/');
-      // Remove empty first element and bucket name, join the rest
-      const bucketIndex = pathParts.findIndex(p => p.includes('financeiro'));
-      const fileKey = pathParts.slice(bucketIndex + 1).join('/');
+      // Remove leading slash from pathname
+      let fileKey = urlObj.pathname.startsWith('/') 
+        ? urlObj.pathname.substring(1) 
+        : urlObj.pathname;
       
       console.log('Requesting signed URL for fileKey:', fileKey);
       
@@ -231,6 +252,9 @@ const BankStatement = () => {
         value: t.value,
         is_paid: true,
         user_id: user?.id,
+        bank: t.banco || null,
+        document_number: t.documento || null,
+        fine_interest: t.multa || 0,
       }));
 
       const { error } = await supabase
@@ -306,8 +330,8 @@ const BankStatement = () => {
         {/* Filters */}
         <Card>
           <CardContent className="pt-6">
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="flex-1">
+            <div className="flex flex-col sm:flex-row gap-4 flex-wrap">
+              <div className="flex-1 min-w-[150px]">
                 <Input
                   type="date"
                   value={startDate}
@@ -315,7 +339,7 @@ const BankStatement = () => {
                   placeholder="Data inicial"
                 />
               </div>
-              <div className="flex-1">
+              <div className="flex-1 min-w-[150px]">
                 <Input
                   type="date"
                   value={endDate}
@@ -323,7 +347,22 @@ const BankStatement = () => {
                   placeholder="Data final"
                 />
               </div>
-              <div className="flex-1">
+              <div className="flex-1 min-w-[150px]">
+                <Select value={bankFilter} onValueChange={setBankFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Banco" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos bancos</SelectItem>
+                    {banks.map((bank) => (
+                      <SelectItem key={bank.id} value={bank.name}>
+                        {bank.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex-1 min-w-[150px]">
                 <Select value={costCenterFilter} onValueChange={setCostCenterFilter}>
                   <SelectTrigger>
                     <SelectValue placeholder="Empresa" />
@@ -338,6 +377,11 @@ const BankStatement = () => {
                   </SelectContent>
                 </Select>
               </div>
+              {hasActiveFilters && (
+                <Button variant="outline" onClick={clearFilters}>
+                  Limpar Filtros
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
