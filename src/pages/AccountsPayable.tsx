@@ -13,6 +13,8 @@ import { useAccountsPayable, AccountPayable } from '@/hooks/useAccountsPayable';
 import { useCategories } from '@/hooks/useSettings';
 import { useAuth } from '@/contexts/AuthContext';
 import { exportToExcel, exportToPDF } from '@/utils/exportUtils';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -89,8 +91,29 @@ const AccountsPayablePage = () => {
     setIsEditModalOpen(true);
   };
 
-  const handleViewAttachment = (url: string) => {
-    window.open(url, '_blank', 'noopener,noreferrer');
+  const handleViewAttachment = async (url: string) => {
+    try {
+      // Extract the file key from the URL
+      const urlObj = new URL(url);
+      const fileKey = urlObj.pathname.substring(1); // Remove leading slash
+      
+      toast.loading('Carregando comprovante...', { id: 'loading-attachment' });
+      
+      const { data, error } = await supabase.functions.invoke('get-signed-url', {
+        body: { fileKey },
+      });
+      
+      toast.dismiss('loading-attachment');
+      
+      if (error || !data?.success) {
+        throw new Error(data?.error || 'Erro ao gerar URL');
+      }
+      
+      window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
+    } catch (error) {
+      console.error('Error getting signed URL:', error);
+      toast.error('Erro ao abrir comprovante');
+    }
   };
 
   const handleExportExcel = () => {
