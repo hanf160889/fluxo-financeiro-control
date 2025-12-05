@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import Login from "./pages/Login";
+import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
 import AccountsPayable from "./pages/AccountsPayable";
 import BankStatement from "./pages/BankStatement";
@@ -31,6 +32,7 @@ const AppRoutes = () => {
   return (
     <Routes>
       <Route path="/" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/contas-pagar" element={<ProtectedRoute><AccountsPayable /></ProtectedRoute>} />
       <Route path="/extrato-bancario" element={<ProtectedRoute><BankStatement /></ProtectedRoute>} />
