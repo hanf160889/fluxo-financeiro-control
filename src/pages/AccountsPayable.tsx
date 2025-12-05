@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Download, FileText, Check, Pencil, Paperclip } from 'lucide-react';
-
+import NewAccountPayableModal from '@/components/forms/NewAccountPayableModal';
 const mockPayables = [
   {
     id: '1',
@@ -39,7 +39,7 @@ const mockPayables = [
 
 const AccountsPayable = () => {
   const [filterCategory, setFilterCategory] = useState('all');
-
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -65,7 +65,7 @@ const AccountsPayable = () => {
               <FileText className="h-4 w-4 mr-2" />
               Baixar PDF
             </Button>
-            <Button>
+            <Button onClick={() => setIsModalOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Nova Conta a Pagar
             </Button>
@@ -167,6 +167,8 @@ const AccountsPayable = () => {
             )}
           </CardContent>
         </Card>
+
+        <NewAccountPayableModal open={isModalOpen} onOpenChange={setIsModalOpen} />
       </div>
     </AppLayout>
   );
