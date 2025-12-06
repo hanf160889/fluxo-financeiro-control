@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,18 +6,20 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Upload, Plus, X } from 'lucide-react';
+import { useOrigins } from '@/hooks/useOrigins';
+import { supabase } from '@/integrations/supabase/client';
 
 interface NewAccountReceivableModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onSave: (data: {
+    description: string;
+    survey_date: string;
+    attachment_url?: string | null;
+    attachment_name?: string | null;
+    origins: { origin_id: string; value: number }[];
+  }) => Promise<boolean>;
 }
-
-// Mock data - will come from settings
-const mockOrigins = [
-  { id: '1', name: 'Vendas Loja' },
-  { id: '2', name: 'Consultoria' },
-  { id: '3', name: 'Serviços Online' },
-];
 
 interface OriginEntry {
   id: string;
@@ -25,15 +27,26 @@ interface OriginEntry {
   value: string;
 }
 
-const NewAccountReceivableModal = ({ open, onOpenChange }: NewAccountReceivableModalProps) => {
+const NewAccountReceivableModal = ({ open, onOpenChange, onSave }: NewAccountReceivableModalProps) => {
   const { toast } = useToast();
+  const { origins: availableOrigins, loading: loadingOrigins } = useOrigins();
   const [description, setDescription] = useState('');
   const [surveyDate, setSurveyDate] = useState('');
   const [origins, setOrigins] = useState<OriginEntry[]>([{ id: '1', originId: '', value: '' }]);
-  const [attachment, setAttachment] = useState<File | null>(null);
+  const [attachmentUrl, setAttachmentUrl] = useState<string | null>(null);
+  const [attachmentName, setAttachmentName] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
 
   const totalValue = origins.reduce((sum, o) => sum + (parseFloat(o.value) || 0), 0);
+
+  const resetForm = () => {
+    setDescription('');
+    setSurveyDate('');
+    setOrigins([{ id: '1', originId: '', value: '' }]);
+    setAttachmentUrl(null);
+    setAttachmentName(null);
+  };
 
   const handleAddOrigin = () => {
     setOrigins([...origins, { id: Date.now().toString(), originId: '', value: '' }]);
@@ -49,10 +62,45 @@ const NewAccountReceivableModal = ({ open, onOpenChange }: NewAccountReceivableM
     setOrigins(origins.map(o => o.id === id ? { ...o, [field]: value } : o));
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setAttachment(e.target.files[0]);
+      const file = e.target.files[0];
+      setIsUploading(true);
+      
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('folder', 'receivables');
+
+        const { data, error } = await supabase.functions.invoke('upload-to-wasabi', {
+          body: formData,
+        });
+
+        if (error) throw error;
+
+        setAttachmentUrl(data.url);
+        setAttachmentName(file.name);
+        
+        toast({
+          title: "Arquivo enviado",
+          description: "Comprovante anexado com sucesso",
+        });
+      } catch (error: any) {
+        console.error('Error uploading file:', error);
+        toast({
+          title: "Erro ao enviar arquivo",
+          description: error.message,
+          variant: "destructive",
+        });
+      } finally {
+        setIsUploading(false);
+      }
     }
+  };
+
+  const handleRemoveFile = () => {
+    setAttachmentUrl(null);
+    setAttachmentName(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -67,8 +115,8 @@ const NewAccountReceivableModal = ({ open, onOpenChange }: NewAccountReceivableM
       return;
     }
 
-    const hasValidOrigin = origins.some(o => o.originId && o.value);
-    if (!hasValidOrigin) {
+    const validOrigins = origins.filter(o => o.originId && parseFloat(o.value) > 0);
+    if (validOrigins.length === 0) {
       toast({
         title: "Erro",
         description: "Adicione ao menos uma origem com valor",
@@ -79,22 +127,30 @@ const NewAccountReceivableModal = ({ open, onOpenChange }: NewAccountReceivableM
 
     setIsLoading(true);
     
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    toast({
-      title: "Sucesso",
-      description: "Recebimento registrado com sucesso",
+    const success = await onSave({
+      description,
+      survey_date: surveyDate,
+      attachment_url: attachmentUrl,
+      attachment_name: attachmentName,
+      origins: validOrigins.map(o => ({
+        origin_id: o.originId,
+        value: parseFloat(o.value),
+      })),
     });
     
-    // Reset form
-    setDescription('');
-    setSurveyDate('');
-    setOrigins([{ id: '1', originId: '', value: '' }]);
-    setAttachment(null);
+    if (success) {
+      resetForm();
+      onOpenChange(false);
+    }
+    
     setIsLoading(false);
-    onOpenChange(false);
   };
+
+  useEffect(() => {
+    if (!open) {
+      resetForm();
+    }
+  }, [open]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -133,7 +189,7 @@ const NewAccountReceivableModal = ({ open, onOpenChange }: NewAccountReceivableM
               </Button>
             </div>
             
-            {origins.map((origin, index) => (
+            {origins.map((origin) => (
               <div key={origin.id} className="flex gap-2 items-end">
                 <div className="flex-1">
                   <Label className="text-xs text-muted-foreground">Origem</Label>
@@ -145,7 +201,7 @@ const NewAccountReceivableModal = ({ open, onOpenChange }: NewAccountReceivableM
                       <SelectValue placeholder="Selecione" />
                     </SelectTrigger>
                     <SelectContent>
-                      {mockOrigins.map((o) => (
+                      {availableOrigins.map((o) => (
                         <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
                       ))}
                     </SelectContent>
@@ -186,32 +242,43 @@ const NewAccountReceivableModal = ({ open, onOpenChange }: NewAccountReceivableM
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="attachment">Comprovante</Label>
-            <div className="flex items-center gap-2">
-              <Input
-                id="attachment"
-                type="file"
-                onChange={handleFileChange}
-                accept="image/*,.pdf"
-                className="hidden"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => document.getElementById('attachment')?.click()}
-                className="w-full"
-              >
-                <Upload className="h-4 w-4 mr-2" />
-                {attachment ? attachment.name : 'Selecionar arquivo'}
-              </Button>
-            </div>
+            <Label>Comprovante</Label>
+            {attachmentName ? (
+              <div className="flex items-center justify-between p-2 border rounded-md bg-muted/50">
+                <span className="text-sm truncate flex-1">{attachmentName}</span>
+                <Button type="button" variant="ghost" size="sm" onClick={handleRemoveFile}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Input
+                  id="attachment-new"
+                  type="file"
+                  onChange={handleFileChange}
+                  accept="image/*,.pdf"
+                  className="hidden"
+                  disabled={isUploading}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => document.getElementById('attachment-new')?.click()}
+                  className="w-full"
+                  disabled={isUploading}
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  {isUploading ? 'Enviando...' : 'Selecionar arquivo'}
+                </Button>
+              </div>
+            )}
           </div>
 
           <div className="flex gap-2 pt-4">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="flex-1">
               Cancelar
             </Button>
-            <Button type="submit" disabled={isLoading} className="flex-1">
+            <Button type="submit" disabled={isLoading || isUploading} className="flex-1">
               {isLoading ? 'Salvando...' : 'Salvar'}
             </Button>
           </div>

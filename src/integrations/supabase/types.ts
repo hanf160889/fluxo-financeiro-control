@@ -134,6 +134,81 @@ export type Database = {
           },
         ]
       }
+      accounts_receivable: {
+        Row: {
+          attachment_name: string | null
+          attachment_url: string | null
+          created_at: string
+          description: string
+          id: string
+          survey_date: string
+          total_value: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          attachment_name?: string | null
+          attachment_url?: string | null
+          created_at?: string
+          description: string
+          id?: string
+          survey_date: string
+          total_value: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          attachment_name?: string | null
+          attachment_url?: string | null
+          created_at?: string
+          description?: string
+          id?: string
+          survey_date?: string
+          total_value?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      accounts_receivable_origins: {
+        Row: {
+          account_receivable_id: string
+          created_at: string
+          id: string
+          origin_id: string
+          value: number
+        }
+        Insert: {
+          account_receivable_id: string
+          created_at?: string
+          id?: string
+          origin_id: string
+          value: number
+        }
+        Update: {
+          account_receivable_id?: string
+          created_at?: string
+          id?: string
+          origin_id?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accounts_receivable_origins_account_receivable_id_fkey"
+            columns: ["account_receivable_id"]
+            isOneToOne: false
+            referencedRelation: "accounts_receivable"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accounts_receivable_origins_origin_id_fkey"
+            columns: ["origin_id"]
+            isOneToOne: false
+            referencedRelation: "origins"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       banks: {
         Row: {
           created_at: string
