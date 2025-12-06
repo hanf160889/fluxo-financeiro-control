@@ -45,7 +45,7 @@ export function useAccountsPayable() {
   const [items, setItems] = useState<AccountPayable[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchItems = async (startDate?: string, endDate?: string, categoryId?: string) => {
+  const fetchItems = async (startDate?: string, endDate?: string, supplierId?: string) => {
     setLoading(true);
     try {
       let query = supabase
@@ -68,8 +68,8 @@ export function useAccountsPayable() {
       if (endDate) {
         query = query.lte('due_date', endDate);
       }
-      if (categoryId && categoryId !== 'all') {
-        query = query.eq('category_id', categoryId);
+      if (supplierId && supplierId !== 'all') {
+        query = query.eq('supplier_id', supplierId);
       }
 
       const { data, error } = await query;
