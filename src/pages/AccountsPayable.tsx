@@ -258,10 +258,12 @@ const AccountsPayablePage = () => {
                 </Select>
               </div>
               <Button onClick={handleFilter}>Filtrar</Button>
-              <Button variant="outline" onClick={handleClearFilters}>
-                <X className="h-4 w-4 mr-2" />
-                Limpar
-              </Button>
+              {(startDate || endDate || filterSupplier !== 'all') && (
+                <Button variant="outline" onClick={handleClearFilters}>
+                  <X className="h-4 w-4 mr-2" />
+                  Limpar
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
