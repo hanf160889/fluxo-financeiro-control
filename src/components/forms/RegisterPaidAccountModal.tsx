@@ -7,7 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import { Upload, X, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
+import FileAttachmentField from './FileAttachmentField';
 
 interface CostCenterPercentage {
   id: string;
@@ -35,9 +36,8 @@ const RegisterPaidAccountModal = ({ open, onOpenChange, onSave }: RegisterPaidAc
   const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>([]);
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
   const [banks, setBanks] = useState<{ id: string; name: string }[]>([]);
-  const [attachmentUrl, setAttachmentUrl] = useState('');
-  const [attachmentName, setAttachmentName] = useState('');
-  const [isUploading, setIsUploading] = useState(false);
+  const [attachmentUrl, setAttachmentUrl] = useState<string | null>(null);
+  const [attachmentName, setAttachmentName] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -56,8 +56,8 @@ const RegisterPaidAccountModal = ({ open, onOpenChange, onSave }: RegisterPaidAc
     setPaymentDate('');
     setValue('');
     setFineInterest('');
-    setAttachmentUrl('');
-    setAttachmentName('');
+    setAttachmentUrl(null);
+    setAttachmentName(null);
   };
 
   const fetchData = async () => {
@@ -74,38 +74,6 @@ const RegisterPaidAccountModal = ({ open, onOpenChange, onSave }: RegisterPaidAc
     if (costCentersRes.data) {
       setCostCenters(costCentersRes.data.map(cc => ({ ...cc, percentage: 0 })));
     }
-  };
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('folder', 'extratos-bancarios');
-
-      const { data, error } = await supabase.functions.invoke('upload-to-wasabi', {
-        body: formData,
-      });
-
-      if (error) throw error;
-      
-      setAttachmentUrl(data.url);
-      setAttachmentName(file.name);
-      toast.success('Arquivo enviado com sucesso!');
-    } catch (error) {
-      console.error('Upload error:', error);
-      toast.error('Erro ao enviar arquivo');
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  const handleRemoveFile = () => {
-    setAttachmentUrl('');
-    setAttachmentName('');
   };
 
   const handleCostCenterChange = (id: string, percentage: number) => {
@@ -147,8 +115,8 @@ const RegisterPaidAccountModal = ({ open, onOpenChange, onSave }: RegisterPaidAc
           value: parseFloat(value),
           fine_interest: fineInterest ? parseFloat(fineInterest) : 0,
           is_paid: true,
-          attachment_url: attachmentUrl || null,
-          attachment_name: attachmentName || null,
+          attachment_url: attachmentUrl,
+          attachment_name: attachmentName,
           user_id: user?.id,
         })
         .select()
@@ -315,27 +283,16 @@ const RegisterPaidAccountModal = ({ open, onOpenChange, onSave }: RegisterPaidAc
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label>Comprovante</Label>
-            {attachmentUrl ? (
-              <div className="flex items-center gap-2 p-2 border rounded">
-                <span className="text-sm flex-1 truncate">{attachmentName}</span>
-                <Button variant="ghost" size="icon" onClick={handleRemoveFile}>
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <Input
-                  type="file"
-                  onChange={handleFileChange}
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  disabled={isUploading}
-                />
-                {isUploading && <Loader2 className="h-4 w-4 animate-spin" />}
-              </div>
-            )}
-          </div>
+          <FileAttachmentField
+            attachmentUrl={attachmentUrl}
+            attachmentName={attachmentName}
+            onAttachmentChange={(url, name) => {
+              setAttachmentUrl(url);
+              setAttachmentName(name);
+            }}
+            folder="extratos-bancarios"
+            inputId="register-paid-file"
+          />
         </div>
 
         <DialogFooter>

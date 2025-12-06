@@ -1,5 +1,8 @@
 project_id = "klglbobjvakvbezzhgat"
 
+[functions.delete-from-wasabi]
+verify_jwt = true
+
 [functions.upload-to-wasabi]
 verify_jwt = false
 

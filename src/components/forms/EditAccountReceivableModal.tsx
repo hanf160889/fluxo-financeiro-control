@@ -5,10 +5,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Upload, Plus, X } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 import { useOrigins } from '@/hooks/useOrigins';
-import { supabase } from '@/integrations/supabase/client';
 import { AccountReceivable, AccountReceivableInput } from '@/hooks/useAccountsReceivable';
+import FileAttachmentField from './FileAttachmentField';
 
 interface EditAccountReceivableModalProps {
   open: boolean;
@@ -31,8 +31,8 @@ const EditAccountReceivableModal = ({ open, onOpenChange, item, onSave }: EditAc
   const [origins, setOrigins] = useState<OriginEntry[]>([{ id: '1', originId: '', value: '' }]);
   const [attachmentUrl, setAttachmentUrl] = useState<string | null>(null);
   const [attachmentName, setAttachmentName] = useState<string | null>(null);
+  const [originalAttachmentUrl, setOriginalAttachmentUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
 
   const totalValue = origins.reduce((sum, o) => sum + (parseFloat(o.value) || 0), 0);
 
@@ -42,6 +42,7 @@ const EditAccountReceivableModal = ({ open, onOpenChange, item, onSave }: EditAc
       setSurveyDate(item.survey_date);
       setAttachmentUrl(item.attachment_url);
       setAttachmentName(item.attachment_name);
+      setOriginalAttachmentUrl(item.attachment_url);
       
       if (item.origins && item.origins.length > 0) {
         setOrigins(item.origins.map(o => ({
@@ -67,47 +68,6 @@ const EditAccountReceivableModal = ({ open, onOpenChange, item, onSave }: EditAc
 
   const handleOriginChange = (id: string, field: 'originId' | 'value', value: string) => {
     setOrigins(origins.map(o => o.id === id ? { ...o, [field]: value } : o));
-  };
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setIsUploading(true);
-      
-      try {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('folder', 'receivables');
-
-        const { data, error } = await supabase.functions.invoke('upload-to-wasabi', {
-          body: formData,
-        });
-
-        if (error) throw error;
-
-        setAttachmentUrl(data.url);
-        setAttachmentName(file.name);
-        
-        toast({
-          title: "Arquivo enviado",
-          description: "Comprovante anexado com sucesso",
-        });
-      } catch (error: any) {
-        console.error('Error uploading file:', error);
-        toast({
-          title: "Erro ao enviar arquivo",
-          description: error.message,
-          variant: "destructive",
-        });
-      } finally {
-        setIsUploading(false);
-      }
-    }
-  };
-
-  const handleRemoveFile = () => {
-    setAttachmentUrl(null);
-    setAttachmentName(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -243,44 +203,23 @@ const EditAccountReceivableModal = ({ open, onOpenChange, item, onSave }: EditAc
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label>Comprovante</Label>
-            {attachmentName ? (
-              <div className="flex items-center justify-between p-2 border rounded-md bg-muted/50">
-                <span className="text-sm truncate flex-1">{attachmentName}</span>
-                <Button type="button" variant="ghost" size="sm" onClick={handleRemoveFile}>
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <Input
-                  id="attachment-edit"
-                  type="file"
-                  onChange={handleFileChange}
-                  accept="image/*,.pdf"
-                  className="hidden"
-                  disabled={isUploading}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => document.getElementById('attachment-edit')?.click()}
-                  className="w-full"
-                  disabled={isUploading}
-                >
-                  <Upload className="h-4 w-4 mr-2" />
-                  {isUploading ? 'Enviando...' : 'Selecionar arquivo'}
-                </Button>
-              </div>
-            )}
-          </div>
+          <FileAttachmentField
+            attachmentUrl={attachmentUrl}
+            attachmentName={attachmentName}
+            onAttachmentChange={(url, name) => {
+              setAttachmentUrl(url);
+              setAttachmentName(name);
+            }}
+            folder="receivables"
+            previousUrl={originalAttachmentUrl}
+            inputId="edit-receivable-file"
+          />
 
           <div className="flex gap-2 pt-4">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="flex-1">
               Cancelar
             </Button>
-            <Button type="submit" disabled={isLoading || isUploading} className="flex-1">
+            <Button type="submit" disabled={isLoading} className="flex-1">
               {isLoading ? 'Salvando...' : 'Salvar'}
             </Button>
           </div>
