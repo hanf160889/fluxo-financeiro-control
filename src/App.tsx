@@ -61,7 +61,7 @@ const AppRoutes = () => {
     <Routes>
       <Route path="/" element={
         isAuthenticated 
-          ? (isApproved ? <Navigate to="/dashboard" replace /> : <Navigate to="/aguardando-aprovacao" replace />) 
+          ? (isApproved ? <Navigate to="/dashboard" replace /> : <Login />) 
           : <Login />
       } />
       <Route path="/reset-password" element={<ResetPassword />} />

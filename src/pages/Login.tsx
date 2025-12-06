@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,18 @@ import { Loader2, DollarSign, CheckCircle, Eye, EyeOff } from 'lucide-react';
 
 const Login = () => {
   const navigate = useNavigate();
-  const { login, register, resetPassword, isLoading } = useAuth();
+  const { login, register, resetPassword, isLoading, isAuthenticated, isApproved, profile } = useAuth();
+  
+  // Redirect authenticated users based on approval status
+  useEffect(() => {
+    if (isAuthenticated && profile !== null) {
+      if (isApproved) {
+        navigate('/dashboard', { replace: true });
+      } else {
+        navigate('/aguardando-aprovacao', { replace: true });
+      }
+    }
+  }, [isAuthenticated, isApproved, profile, navigate]);
   
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -37,7 +48,7 @@ const Login = () => {
     
     const result = await login(loginEmail, loginPassword);
     if (result.success) {
-      navigate('/dashboard');
+      // Navigation will be handled by useEffect after profile is loaded
     } else {
       setLoginError(result.error || 'Credenciais inválidas');
     }
