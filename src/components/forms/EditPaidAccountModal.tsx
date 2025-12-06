@@ -7,7 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
-import { Loader2, Paperclip, X } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
+import FileAttachmentField from './FileAttachmentField';
 
 interface CostCenter {
   id: string;
@@ -66,10 +67,10 @@ const EditPaidAccountModal = ({ open, onOpenChange, onSave, account }: EditPaidA
   const [paymentDate, setPaymentDate] = useState('');
   const [value, setValue] = useState('');
   const [fineInterest, setFineInterest] = useState('');
-  const [attachmentUrl, setAttachmentUrl] = useState('');
-  const [attachmentName, setAttachmentName] = useState('');
+  const [attachmentUrl, setAttachmentUrl] = useState<string | null>(null);
+  const [attachmentName, setAttachmentName] = useState<string | null>(null);
+  const [originalAttachmentUrl, setOriginalAttachmentUrl] = useState<string | null>(null);
   const [costCenterPercentages, setCostCenterPercentages] = useState<Record<string, string>>({});
-  const [uploadingFile, setUploadingFile] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -105,8 +106,9 @@ const EditPaidAccountModal = ({ open, onOpenChange, onSave, account }: EditPaidA
     setPaymentDate(account.payment_date || '');
     setValue(account.value.toString());
     setFineInterest((account.fine_interest || 0).toString());
-    setAttachmentUrl(account.attachment_url || '');
-    setAttachmentName(account.attachment_name || '');
+    setAttachmentUrl(account.attachment_url);
+    setAttachmentName(account.attachment_name);
+    setOriginalAttachmentUrl(account.attachment_url);
 
     // Load cost center distribution
     const { data: ccData } = await supabase
@@ -121,35 +123,6 @@ const EditPaidAccountModal = ({ open, onOpenChange, onSave, account }: EditPaidA
       });
       setCostCenterPercentages(percentages);
     }
-  };
-
-  const handleFileUpload = async (file: File) => {
-    setUploadingFile(true);
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('folder', 'extratos-bancarios');
-
-      const { data, error } = await supabase.functions.invoke('upload-to-wasabi', {
-        body: formData,
-      });
-
-      if (error) throw error;
-
-      setAttachmentUrl(data.url);
-      setAttachmentName(file.name);
-      toast.success('Arquivo enviado!');
-    } catch (error) {
-      console.error('Upload error:', error);
-      toast.error('Erro ao enviar arquivo');
-    } finally {
-      setUploadingFile(false);
-    }
-  };
-
-  const removeAttachment = () => {
-    setAttachmentUrl('');
-    setAttachmentName('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -179,8 +152,8 @@ const EditPaidAccountModal = ({ open, onOpenChange, onSave, account }: EditPaidA
           payment_date: paymentDate || null,
           value: parseFloat(value),
           fine_interest: parseFloat(fineInterest) || 0,
-          attachment_url: attachmentUrl || null,
-          attachment_name: attachmentName || null,
+          attachment_url: attachmentUrl,
+          attachment_name: attachmentName,
         })
         .eq('id', account.id);
 
@@ -348,41 +321,17 @@ const EditPaidAccountModal = ({ open, onOpenChange, onSave, account }: EditPaidA
             </div>
           </div>
 
-          {/* Attachment */}
-          <div className="space-y-2">
-            <Label>Comprovante</Label>
-            {attachmentUrl ? (
-              <div className="flex items-center gap-2 p-2 border rounded">
-                <Paperclip className="h-4 w-4" />
-                <span className="text-sm flex-1 truncate">{attachmentName || 'Arquivo anexado'}</span>
-                <Button type="button" variant="ghost" size="icon" onClick={removeAttachment}>
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            ) : (
-              <label className="cursor-pointer">
-                <input
-                  type="file"
-                  className="hidden"
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleFileUpload(file);
-                  }}
-                />
-                <Button type="button" variant="outline" asChild disabled={uploadingFile}>
-                  <span>
-                    {uploadingFile ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <Paperclip className="h-4 w-4 mr-2" />
-                    )}
-                    Anexar Comprovante
-                  </span>
-                </Button>
-              </label>
-            )}
-          </div>
+          <FileAttachmentField
+            attachmentUrl={attachmentUrl}
+            attachmentName={attachmentName}
+            onAttachmentChange={(url, name) => {
+              setAttachmentUrl(url);
+              setAttachmentName(name);
+            }}
+            folder="extratos-bancarios"
+            previousUrl={originalAttachmentUrl}
+            inputId="edit-paid-file"
+          />
 
           <div className="flex justify-end gap-2 pt-4">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
