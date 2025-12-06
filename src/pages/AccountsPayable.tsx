@@ -1,21 +1,21 @@
-import { useState } from 'react';
-import AppLayout from '@/components/layout/AppLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, Download, FileText, Check, Pencil, Paperclip, Trash2, Loader2, X } from 'lucide-react';
-import NewAccountPayableModal from '@/components/forms/NewAccountPayableModal';
-import EditAccountPayableModal from '@/components/forms/EditAccountPayableModal';
-import { useAccountsPayable, AccountPayable } from '@/hooks/useAccountsPayable';
-import { useSuppliers } from '@/hooks/useSettings';
-import { useAuth } from '@/contexts/AuthContext';
-import { exportToExcel, exportToPDF } from '@/utils/exportUtils';
-import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
+import { useState } from "react";
+import AppLayout from "@/components/layout/AppLayout";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Plus, Download, FileText, Check, Pencil, Paperclip, Trash2, Loader2, X } from "lucide-react";
+import NewAccountPayableModal from "@/components/forms/NewAccountPayableModal";
+import EditAccountPayableModal from "@/components/forms/EditAccountPayableModal";
+import { useAccountsPayable, AccountPayable } from "@/hooks/useAccountsPayable";
+import { useSuppliers } from "@/hooks/useSettings";
+import { useAuth } from "@/contexts/AuthContext";
+import { exportToExcel, exportToPDF } from "@/utils/exportUtils";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,16 +25,16 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+} from "@/components/ui/alert-dialog";
 
 const AccountsPayablePage = () => {
   const { items, loading, fetchItems, addItem, markAsPaid, deleteItem } = useAccountsPayable();
   const { items: suppliers } = useSuppliers();
   const { role } = useAuth();
-  
-  const [filterSupplier, setFilterSupplier] = useState('all');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+
+  const [filterSupplier, setFilterSupplier] = useState("all");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [itemToEdit, setItemToEdit] = useState<AccountPayable | null>(null);
@@ -46,18 +46,18 @@ const AccountsPayablePage = () => {
   const [batchDeleteDialogOpen, setBatchDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const canEdit = role === 'admin' || role === 'editor';
-  const canDelete = role === 'admin';
+  const canEdit = role === "admin" || role === "editor";
+  const canDelete = role === "admin";
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
     }).format(value);
   };
 
   const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('pt-BR');
+    return new Date(dateStr).toLocaleDateString("pt-BR");
   };
 
   const handleFilter = () => {
@@ -66,16 +66,16 @@ const AccountsPayablePage = () => {
   };
 
   const handleClearFilters = () => {
-    setStartDate('');
-    setEndDate('');
-    setFilterSupplier('all');
+    setStartDate("");
+    setEndDate("");
+    setFilterSupplier("all");
     fetchItems();
     setSelectedIds([]);
   };
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedIds(items.map(item => item.id));
+      setSelectedIds(items.map((item) => item.id));
     } else {
       setSelectedIds([]);
     }
@@ -83,9 +83,9 @@ const AccountsPayablePage = () => {
 
   const handleSelectItem = (id: string, checked: boolean) => {
     if (checked) {
-      setSelectedIds(prev => [...prev, id]);
+      setSelectedIds((prev) => [...prev, id]);
     } else {
-      setSelectedIds(prev => prev.filter(i => i !== id));
+      setSelectedIds((prev) => prev.filter((i) => i !== id));
     }
   };
 
@@ -94,17 +94,14 @@ const AccountsPayablePage = () => {
     try {
       // Delete cost center distributions first
       const { error: ccError } = await supabase
-        .from('accounts_payable_cost_centers')
+        .from("accounts_payable_cost_centers")
         .delete()
-        .in('account_payable_id', selectedIds);
-      
+        .in("account_payable_id", selectedIds);
+
       if (ccError) throw ccError;
 
       // Delete accounts payable
-      const { error } = await supabase
-        .from('accounts_payable')
-        .delete()
-        .in('id', selectedIds);
+      const { error } = await supabase.from("accounts_payable").delete().in("id", selectedIds);
 
       if (error) throw error;
 
@@ -112,8 +109,8 @@ const AccountsPayablePage = () => {
       setSelectedIds([]);
       fetchItems();
     } catch (error: any) {
-      toast.error('Erro ao excluir contas');
-      console.error('Error batch deleting:', error);
+      toast.error("Erro ao excluir contas");
+      console.error("Error batch deleting:", error);
     } finally {
       setDeleting(false);
       setBatchDeleteDialogOpen(false);
@@ -127,7 +124,7 @@ const AccountsPayablePage = () => {
 
   const confirmMarkAsPaid = () => {
     if (itemToPay) {
-      markAsPaid(itemToPay, new Date().toISOString().split('T')[0]);
+      markAsPaid(itemToPay, new Date().toISOString().split("T")[0]);
       setPayDialogOpen(false);
       setItemToPay(null);
     }
@@ -156,37 +153,33 @@ const AccountsPayablePage = () => {
       // Extract the file key from the URL
       const urlObj = new URL(url);
       const fileKey = urlObj.pathname.substring(1); // Remove leading slash
-      
-      toast.loading('Carregando comprovante...', { id: 'loading-attachment' });
-      
-      const { data, error } = await supabase.functions.invoke('get-signed-url', {
+
+      toast.loading("Carregando comprovante...", { id: "loading-attachment" });
+
+      const { data, error } = await supabase.functions.invoke("get-signed-url", {
         body: { fileKey },
       });
-      
-      toast.dismiss('loading-attachment');
-      
+
+      toast.dismiss("loading-attachment");
+
       if (error || !data?.success) {
-        throw new Error(data?.error || 'Erro ao gerar URL');
+        throw new Error(data?.error || "Erro ao gerar URL");
       }
-      
-      window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
+
+      window.open(data.signedUrl, "_blank", "noopener,noreferrer");
     } catch (error) {
-      console.error('Error getting signed URL:', error);
-      toast.error('Erro ao abrir comprovante');
+      console.error("Error getting signed URL:", error);
+      toast.error("Erro ao abrir comprovante");
     }
   };
 
   const handleExportExcel = () => {
-    const dateRange = startDate || endDate 
-      ? `_${startDate || 'inicio'}_${endDate || 'fim'}` 
-      : '';
+    const dateRange = startDate || endDate ? `_${startDate || "inicio"}_${endDate || "fim"}` : "";
     exportToExcel(items, `contas-a-pagar${dateRange}`);
   };
 
   const handleExportPDF = () => {
-    const dateRange = startDate || endDate 
-      ? `_${startDate || 'inicio'}_${endDate || 'fim'}` 
-      : '';
+    const dateRange = startDate || endDate ? `_${startDate || "inicio"}_${endDate || "fim"}` : "";
     exportToPDF(items, `contas-a-pagar${dateRange}`);
   };
 
@@ -194,7 +187,7 @@ const AccountsPayablePage = () => {
     if (item.total_installments && item.total_installments > 1) {
       return `${item.current_installment} de ${item.total_installments}`;
     }
-    return '-';
+    return "-";
   };
 
   return (
@@ -205,7 +198,7 @@ const AccountsPayablePage = () => {
             <h1 className="text-3xl font-bold">Contas a Pagar</h1>
             <p className="text-muted-foreground">Gerencie suas contas pendentes</p>
           </div>
-          
+
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={handleExportExcel}>
               <Download className="h-4 w-4 mr-2" />
@@ -229,16 +222,16 @@ const AccountsPayablePage = () => {
           <CardContent className="pt-6">
             <div className="flex flex-col sm:flex-row gap-4">
               <div className="flex-1">
-                <Input 
-                  type="date" 
-                  placeholder="Data inicial" 
+                <Input
+                  type="date"
+                  placeholder="Data inicial"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
                 />
               </div>
               <div className="flex-1">
-                <Input 
-                  type="date" 
+                <Input
+                  type="date"
                   placeholder="Data final"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
@@ -252,16 +245,18 @@ const AccountsPayablePage = () => {
                   <SelectContent>
                     <SelectItem value="all">Todos fornecedores</SelectItem>
                     {suppliers.map((sup) => (
-                      <SelectItem key={sup.id} value={sup.id}>{sup.name}</SelectItem>
+                      <SelectItem key={sup.id} value={sup.id}>
+                        {sup.name}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <Button onClick={handleFilter}>Filtrar</Button>
-              {(startDate || endDate || filterSupplier !== 'all') && (
+              {(startDate || endDate || filterSupplier !== "all") && (
                 <Button variant="outline" onClick={handleClearFilters}>
                   <X className="h-4 w-4 mr-2" />
-                  Limpar
+                  Limpar Filtros
                 </Button>
               )}
             </div>
@@ -273,11 +268,7 @@ const AccountsPayablePage = () => {
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Lista de Contas</CardTitle>
             {selectedIds.length > 0 && canDelete && (
-              <Button 
-                variant="destructive" 
-                size="sm"
-                onClick={() => setBatchDeleteDialogOpen(true)}
-              >
+              <Button variant="destructive" size="sm" onClick={() => setBatchDeleteDialogOpen(true)}>
                 <Trash2 className="h-4 w-4 mr-2" />
                 Excluir ({selectedIds.length})
               </Button>
@@ -289,9 +280,7 @@ const AccountsPayablePage = () => {
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
             ) : items.length === 0 ? (
-              <p className="text-muted-foreground text-center py-8">
-                Nenhuma conta pendente
-              </p>
+              <p className="text-muted-foreground text-center py-8">Nenhuma conta pendente</p>
             ) : (
               <div className="overflow-x-auto">
                 <Table>
@@ -329,24 +318,24 @@ const AccountsPayablePage = () => {
                           </TableCell>
                         )}
                         <TableCell className="font-medium">{item.description}</TableCell>
-                        <TableCell>{item.supplier?.name || '-'}</TableCell>
-                        <TableCell>{item.category?.name || '-'}</TableCell>
-                        <TableCell>{item.document_number || '-'}</TableCell>
+                        <TableCell>{item.supplier?.name || "-"}</TableCell>
+                        <TableCell>{item.category?.name || "-"}</TableCell>
+                        <TableCell>{item.document_number || "-"}</TableCell>
                         <TableCell>{formatDate(item.due_date)}</TableCell>
                         <TableCell>{getInstallmentText(item)}</TableCell>
-                        <TableCell>{item.payment_date ? formatDate(item.payment_date) : '-'}</TableCell>
+                        <TableCell>{item.payment_date ? formatDate(item.payment_date) : "-"}</TableCell>
                         <TableCell className="text-right">{formatCurrency(item.value)}</TableCell>
                         <TableCell>
-                          <Badge variant={item.is_paid ? 'default' : 'destructive'}>
-                            {item.is_paid ? 'Paga' : 'Pendente'}
+                          <Badge variant={item.is_paid ? "default" : "destructive"}>
+                            {item.is_paid ? "Paga" : "Pendente"}
                           </Badge>
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-1">
                             {!item.is_paid && canEdit && (
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
+                              <Button
+                                variant="ghost"
+                                size="icon"
                                 title="Marcar como paga"
                                 onClick={() => handleMarkAsPaid(item.id)}
                               >
@@ -354,19 +343,14 @@ const AccountsPayablePage = () => {
                               </Button>
                             )}
                             {canEdit && (
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                title="Editar"
-                                onClick={() => handleEdit(item)}
-                              >
+                              <Button variant="ghost" size="icon" title="Editar" onClick={() => handleEdit(item)}>
                                 <Pencil className="h-4 w-4" />
                               </Button>
                             )}
                             {item.attachment_url && (
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
+                              <Button
+                                variant="ghost"
+                                size="icon"
                                 title="Ver comprovante"
                                 onClick={() => handleViewAttachment(item.attachment_url!)}
                               >
@@ -374,12 +358,7 @@ const AccountsPayablePage = () => {
                               </Button>
                             )}
                             {canDelete && (
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                title="Excluir"
-                                onClick={() => handleDelete(item.id)}
-                              >
+                              <Button variant="ghost" size="icon" title="Excluir" onClick={() => handleDelete(item.id)}>
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             )}
@@ -394,11 +373,7 @@ const AccountsPayablePage = () => {
           </CardContent>
         </Card>
 
-        <NewAccountPayableModal 
-          open={isModalOpen} 
-          onOpenChange={setIsModalOpen}
-          onSubmit={addItem}
-        />
+        <NewAccountPayableModal open={isModalOpen} onOpenChange={setIsModalOpen} onSubmit={addItem} />
 
         <EditAccountPayableModal
           open={isEditModalOpen}
@@ -428,9 +403,7 @@ const AccountsPayablePage = () => {
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Confirmar pagamento</AlertDialogTitle>
-              <AlertDialogDescription>
-                Deseja marcar esta conta como paga com a data de hoje?
-              </AlertDialogDescription>
+              <AlertDialogDescription>Deseja marcar esta conta como paga com a data de hoje?</AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancelar</AlertDialogCancel>
