@@ -299,6 +299,7 @@ export type Database = {
           created_at: string
           email: string | null
           id: string
+          is_approved: boolean
           name: string | null
           updated_at: string
         }
@@ -307,6 +308,7 @@ export type Database = {
           created_at?: string
           email?: string | null
           id: string
+          is_approved?: boolean
           name?: string | null
           updated_at?: string
         }
@@ -315,6 +317,7 @@ export type Database = {
           created_at?: string
           email?: string | null
           id?: string
+          is_approved?: boolean
           name?: string | null
           updated_at?: string
         }
@@ -338,6 +341,27 @@ export type Database = {
           id?: string
           name?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      user_page_permissions: {
+        Row: {
+          created_at: string
+          id: string
+          page_path: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          page_path: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          page_path?: string
+          user_id?: string
         }
         Relationships: []
       }
