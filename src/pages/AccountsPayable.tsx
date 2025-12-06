@@ -6,11 +6,12 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Download, FileText, Check, Pencil, Paperclip, Trash2, Loader2 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Plus, Download, FileText, Check, Pencil, Paperclip, Trash2, Loader2, X } from 'lucide-react';
 import NewAccountPayableModal from '@/components/forms/NewAccountPayableModal';
 import EditAccountPayableModal from '@/components/forms/EditAccountPayableModal';
 import { useAccountsPayable, AccountPayable } from '@/hooks/useAccountsPayable';
-import { useCategories } from '@/hooks/useSettings';
+import { useSuppliers } from '@/hooks/useSettings';
 import { useAuth } from '@/contexts/AuthContext';
 import { exportToExcel, exportToPDF } from '@/utils/exportUtils';
 import { supabase } from '@/integrations/supabase/client';
@@ -28,10 +29,10 @@ import {
 
 const AccountsPayablePage = () => {
   const { items, loading, fetchItems, addItem, markAsPaid, deleteItem } = useAccountsPayable();
-  const { items: categories } = useCategories();
+  const { items: suppliers } = useSuppliers();
   const { role } = useAuth();
   
-  const [filterCategory, setFilterCategory] = useState('all');
+  const [filterSupplier, setFilterSupplier] = useState('all');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -41,6 +42,9 @@ const AccountsPayablePage = () => {
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [payDialogOpen, setPayDialogOpen] = useState(false);
   const [itemToPay, setItemToPay] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [batchDeleteDialogOpen, setBatchDeleteDialogOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const canEdit = role === 'admin' || role === 'editor';
   const canDelete = role === 'admin';
@@ -57,7 +61,63 @@ const AccountsPayablePage = () => {
   };
 
   const handleFilter = () => {
-    fetchItems(startDate || undefined, endDate || undefined, filterCategory);
+    fetchItems(startDate || undefined, endDate || undefined, filterSupplier);
+    setSelectedIds([]);
+  };
+
+  const handleClearFilters = () => {
+    setStartDate('');
+    setEndDate('');
+    setFilterSupplier('all');
+    fetchItems();
+    setSelectedIds([]);
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedIds(items.map(item => item.id));
+    } else {
+      setSelectedIds([]);
+    }
+  };
+
+  const handleSelectItem = (id: string, checked: boolean) => {
+    if (checked) {
+      setSelectedIds(prev => [...prev, id]);
+    } else {
+      setSelectedIds(prev => prev.filter(i => i !== id));
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    setDeleting(true);
+    try {
+      // Delete cost center distributions first
+      const { error: ccError } = await supabase
+        .from('accounts_payable_cost_centers')
+        .delete()
+        .in('account_payable_id', selectedIds);
+      
+      if (ccError) throw ccError;
+
+      // Delete accounts payable
+      const { error } = await supabase
+        .from('accounts_payable')
+        .delete()
+        .in('id', selectedIds);
+
+      if (error) throw error;
+
+      toast.success(`${selectedIds.length} conta(s) excluída(s) com sucesso!`);
+      setSelectedIds([]);
+      fetchItems();
+    } catch (error: any) {
+      toast.error('Erro ao excluir contas');
+      console.error('Error batch deleting:', error);
+    } finally {
+      setDeleting(false);
+      setBatchDeleteDialogOpen(false);
+    }
   };
 
   const handleMarkAsPaid = (id: string) => {
@@ -185,27 +245,41 @@ const AccountsPayablePage = () => {
                 />
               </div>
               <div className="flex-1">
-                <Select value={filterCategory} onValueChange={setFilterCategory}>
+                <Select value={filterSupplier} onValueChange={setFilterSupplier}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Categoria" />
+                    <SelectValue placeholder="Fornecedor" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Todas categorias</SelectItem>
-                    {categories.map((cat) => (
-                      <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                    <SelectItem value="all">Todos fornecedores</SelectItem>
+                    {suppliers.map((sup) => (
+                      <SelectItem key={sup.id} value={sup.id}>{sup.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <Button onClick={handleFilter}>Filtrar</Button>
+              <Button variant="outline" onClick={handleClearFilters}>
+                <X className="h-4 w-4 mr-2" />
+                Limpar
+              </Button>
             </div>
           </CardContent>
         </Card>
 
         {/* Table */}
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Lista de Contas</CardTitle>
+            {selectedIds.length > 0 && canDelete && (
+              <Button 
+                variant="destructive" 
+                size="sm"
+                onClick={() => setBatchDeleteDialogOpen(true)}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Excluir ({selectedIds.length})
+              </Button>
+            )}
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -221,6 +295,14 @@ const AccountsPayablePage = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      {canDelete && (
+                        <TableHead className="w-12">
+                          <Checkbox
+                            checked={selectedIds.length === items.length && items.length > 0}
+                            onCheckedChange={handleSelectAll}
+                          />
+                        </TableHead>
+                      )}
                       <TableHead>Descrição</TableHead>
                       <TableHead>Fornecedor</TableHead>
                       <TableHead>Categoria</TableHead>
@@ -236,6 +318,14 @@ const AccountsPayablePage = () => {
                   <TableBody>
                     {items.map((item) => (
                       <TableRow key={item.id}>
+                        {canDelete && (
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedIds.includes(item.id)}
+                              onCheckedChange={(checked) => handleSelectItem(item.id, !!checked)}
+                            />
+                          </TableCell>
+                        )}
                         <TableCell className="font-medium">{item.description}</TableCell>
                         <TableCell>{item.supplier?.name || '-'}</TableCell>
                         <TableCell>{item.category?.name || '-'}</TableCell>
@@ -343,6 +433,25 @@ const AccountsPayablePage = () => {
             <AlertDialogFooter>
               <AlertDialogCancel>Cancelar</AlertDialogCancel>
               <AlertDialogAction onClick={confirmMarkAsPaid}>Confirmar</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Batch Delete Confirmation Dialog */}
+        <AlertDialog open={batchDeleteDialogOpen} onOpenChange={setBatchDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirmar exclusão em massa</AlertDialogTitle>
+              <AlertDialogDescription>
+                Tem certeza que deseja excluir {selectedIds.length} conta(s)? Esta ação não pode ser desfeita.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={handleBatchDelete} disabled={deleting}>
+                {deleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Excluir
+              </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
