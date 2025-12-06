@@ -9,6 +9,7 @@ interface Profile {
   name: string | null;
   email: string | null;
   avatar_url: string | null;
+  is_approved: boolean;
 }
 
 interface AuthContextType {
@@ -17,6 +18,7 @@ interface AuthContextType {
   profile: Profile | null;
   role: AppRole | null;
   isAuthenticated: boolean;
+  isApproved: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (email: string, password: string, name: string) => Promise<{ success: boolean; error?: string }>;
   resetPassword: (email: string) => Promise<{ success: boolean; error?: string }>;
@@ -36,7 +38,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const fetchProfile = async (userId: string) => {
     const { data } = await supabase
       .from('profiles')
-      .select('*')
+      .select('id, name, email, avatar_url, is_approved')
       .eq('id', userId)
       .single();
     
@@ -170,6 +172,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       profile,
       role,
       isAuthenticated: !!session,
+      isApproved: profile?.is_approved ?? false,
       login,
       register,
       resetPassword,
