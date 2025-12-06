@@ -227,6 +227,62 @@ export const useAccountsReceivable = () => {
     }
   };
 
+  const updateItem = async (id: string, input: AccountReceivableInput) => {
+    try {
+      const totalValue = input.origins.reduce((sum, o) => sum + o.value, 0);
+
+      const { error } = await supabase
+        .from('accounts_receivable')
+        .update({
+          description: input.description,
+          survey_date: input.survey_date,
+          total_value: totalValue,
+          attachment_url: input.attachment_url,
+          attachment_name: input.attachment_name,
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      // Delete existing origins
+      await supabase
+        .from('accounts_receivable_origins')
+        .delete()
+        .eq('account_receivable_id', id);
+
+      // Insert new origins
+      if (input.origins.length > 0) {
+        const originsData = input.origins.map(o => ({
+          account_receivable_id: id,
+          origin_id: o.origin_id,
+          value: o.value,
+        }));
+
+        const { error: originsError } = await supabase
+          .from('accounts_receivable_origins')
+          .insert(originsData);
+
+        if (originsError) throw originsError;
+      }
+
+      toast({
+        title: "Sucesso",
+        description: "Conta a receber atualizada com sucesso",
+      });
+
+      await fetchItems();
+      return true;
+    } catch (error: any) {
+      console.error('Error updating account receivable:', error);
+      toast({
+        title: "Erro ao atualizar",
+        description: error.message,
+        variant: "destructive",
+      });
+      return false;
+    }
+  };
+
   useEffect(() => {
     fetchItems();
   }, []);
@@ -236,6 +292,7 @@ export const useAccountsReceivable = () => {
     loading,
     fetchItems,
     addItem,
+    updateItem,
     deleteItem,
     deleteMultiple,
     updateAttachment,
