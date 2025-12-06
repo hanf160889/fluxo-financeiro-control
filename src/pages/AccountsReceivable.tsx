@@ -145,8 +145,12 @@ const AccountsReceivable = () => {
     if (!item.attachment_url) return;
 
     try {
+      // Extract fileKey from full Wasabi URL
+      const url = new URL(item.attachment_url);
+      const fileKey = url.pathname.substring(1); // Remove leading slash
+
       const { data, error } = await supabase.functions.invoke('get-signed-url', {
-        body: { url: item.attachment_url },
+        body: { fileKey },
       });
 
       if (error) throw error;
