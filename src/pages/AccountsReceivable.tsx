@@ -6,9 +6,10 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Download, FileSpreadsheet, FileText, Trash2, Search, X, Upload } from 'lucide-react';
+import { Plus, Download, FileSpreadsheet, FileText, Trash2, Search, X, Upload, Pencil } from 'lucide-react';
 import NewAccountReceivableModal from '@/components/forms/NewAccountReceivableModal';
-import { useAccountsReceivable, AccountReceivable } from '@/hooks/useAccountsReceivable';
+import EditAccountReceivableModal from '@/components/forms/EditAccountReceivableModal';
+import { useAccountsReceivable, AccountReceivable, AccountReceivableInput } from '@/hooks/useAccountsReceivable';
 import { useOrigins } from '@/hooks/useOrigins';
 import { useAuth } from '@/contexts/AuthContext';
 import { exportReceivablesToExcel, exportReceivablesToPDF } from '@/utils/exportReceivablesUtils';
@@ -25,8 +26,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-const AccountsReceivable = () => {
+const AccountsReceivablePage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<AccountReceivable | null>(null);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [startDate, setStartDate] = useState('');
@@ -34,7 +37,7 @@ const AccountsReceivable = () => {
   const [filterOrigin, setFilterOrigin] = useState('all');
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   
-  const { items, loading, fetchItems, addItem, deleteMultiple, updateAttachment } = useAccountsReceivable();
+  const { items, loading, fetchItems, addItem, updateItem, deleteMultiple, updateAttachment } = useAccountsReceivable();
   const { origins } = useOrigins();
   const { role } = useAuth();
   const { toast } = useToast();
@@ -109,6 +112,15 @@ const AccountsReceivable = () => {
     origins: { origin_id: string; value: number }[];
   }) => {
     return await addItem(data);
+  };
+
+  const handleEdit = (item: AccountReceivable) => {
+    setEditingItem(item);
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveEdit = async (id: string, data: AccountReceivableInput) => {
+    return await updateItem(id, data);
   };
 
   const handleUploadAttachment = async (item: AccountReceivable, e: React.ChangeEvent<HTMLInputElement>) => {
@@ -298,6 +310,7 @@ const AccountsReceivable = () => {
                       <TableHead>Origens</TableHead>
                       <TableHead className="text-right">Valor Total</TableHead>
                       <TableHead>Comprovante</TableHead>
+                      {(role === 'admin' || role === 'editor') && <TableHead className="w-20">Ações</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -345,9 +358,20 @@ const AccountsReceivable = () => {
                               </Button>
                             </>
                           ) : (
-                            <span className="text-muted-foreground">-</span>
+                          <span className="text-muted-foreground">-</span>
                           )}
                         </TableCell>
+                        {(role === 'admin' || role === 'editor') && (
+                          <TableCell>
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => handleEdit(receivable)}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -362,6 +386,13 @@ const AccountsReceivable = () => {
         open={isModalOpen} 
         onOpenChange={setIsModalOpen}
         onSave={handleSaveNew}
+      />
+
+      <EditAccountReceivableModal
+        open={isEditModalOpen}
+        onOpenChange={setIsEditModalOpen}
+        item={editingItem}
+        onSave={handleSaveEdit}
       />
 
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
@@ -382,4 +413,4 @@ const AccountsReceivable = () => {
   );
 };
 
-export default AccountsReceivable;
+export default AccountsReceivablePage;
